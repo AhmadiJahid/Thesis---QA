@@ -8,7 +8,10 @@ alwaysApply: false
 Goal: Make Jira → execution loop frictionless.
 
 When invoked:
-1) Use Atlassian MCP to fetch Thesis-related Jira issues:
+1) Use Atlassian MCP to fetch Thesis-related Jira issues from project **TQ (Thesis - QA)**:
+   - Cloud ID: f97c7789-c9f8-4559-97e4-18d9d8c3845f
+   - Project Key: TQ
+   - Project Name: Thesis - QA
    - statuses: To Do, In Progress, Blocked (or your equivalents)
    - include key, title, status, priority, assignee, last updated
 

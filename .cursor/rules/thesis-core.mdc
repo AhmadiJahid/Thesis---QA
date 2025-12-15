@@ -20,6 +20,7 @@ alwaysApply: true
 - Avoid “magic constants”: promote to config.
 
 ### Tracking
+- **Jira Project:** TQ (Thesis - QA) - Always use this project when working with Jira
 - Work should map to an issue/PR. If user asks “do X”, respond with an issue checklist mindset:
   - definition of done
   - files to touch

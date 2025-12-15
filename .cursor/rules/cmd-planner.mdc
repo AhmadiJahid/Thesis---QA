@@ -1,0 +1,50 @@
+---
+description: "Manual command: use docs/PLANNER.md to discuss and decide; promote decisions to DECISIONS.md; convert actions into Jira tasks; keep PROJECT.md aligned. No code."
+alwaysApply: false
+---
+
+## @cmd-planner
+
+Purpose: Run a planning session that stays aligned with our workflow.
+
+### Inputs
+- A topic title (required)
+- Optional: brief prompt/context, constraints, options you’re considering
+
+### What to do when invoked
+1) Update `docs/PLANNER.md`
+   - Create or update a section under **Current Topics (active)** using the Planner template:
+     - Goal / question
+     - Context
+     - Constraints
+     - What we know / don’t know
+     - Options (A/B/C)
+     - Risks / failure modes
+     - Proposed next step
+   - Keep it concise (bullets preferred). No fluff.
+
+2) Conduct the planning conversation in chat
+   - Ask ONLY the minimum needed questions to resolve ambiguity.
+   - If ambiguity is small, propose a best-guess plan instead of stalling.
+
+3) If a decision is reached (user confirms a choice)
+   - Write a new entry into `docs/DECISIONS.md` using the Decisions template:
+     - Context / Decision / Why / Tradeoffs / Consequences
+   - In `docs/PLANNER.md`, mark the topic as decided:
+     - add a short “Decision: …” line
+     - add “Moved to DECISIONS.md on <date>”
+
+4) Convert the decision into Jira tasks
+   - Use Atlassian MCP to create 2–6 Jira issues that reflect the decision.
+   - Each Jira issue must include:
+     - a clear goal
+     - acceptance criteria (Definition of Done)
+     - notes on which files/docs will likely change
+
+5) Align the project brief
+   - Update `docs/PROJECT.md` section “Next Up (from Jira)” with the newly created Jira keys/titles (ranked).
+
+### Constraints
+- Do NOT write implementation code or notebooks in this command.
+- Do NOT fabricate results, model performance, dataset stats, or citations.
+- Do NOT mark work as done unless Jira is updated accordingly.

@@ -44,6 +44,10 @@ Each run should produce:
 
 ### Tracking
 We use Jira as the source of truth for planned work.
+- **Jira Project:** TQ (Thesis - QA)
+- **Cloud ID:** f97c7789-c9f8-4559-97e4-18d9d8c3845f
+- **Project URL:** https://jahid-ahmadi-student.atlassian.net/browse/TQ
+
 Completed Jira tasks must be reflected in:
 - `docs/CHANGELOG.md` (append-only)
 - `docs/PROJECT.md` (only if project state changed)
@@ -51,4 +55,26 @@ Completed Jira tasks must be reflected in:
 ---
 
 ## Next Up (from Jira)
-- [PLACEHOLDER: Agent fills from Jira during sync]
+
+**Ranked tasks (created 2025-12-15):**
+
+1. **[TQ-1] Implement Router Component - Hop Count Classification**
+   - Classify questions into 1-hop, 2-hop, or 3-hop
+   - Model: Qwen2.5-0.5B-Instruct
+   - Status: To Do
+
+2. **[TQ-2] Implement Decomposer Component - Question Decomposition to Sub-questions**
+   - Break multi-hop questions into ordered sub-questions (JSON format)
+   - Model: Qwen2.5-7B-Instruct
+   - Status: To Do
+
+3. **[TQ-3] Implement Jury Component - Decomposition Validation**
+   - Validate sub-questions (order, composition, sense)
+   - Model: Qwen2.5-7B-Instruct (same as Decomposer)
+   - Status: To Do
+
+4. **[TQ-4] Integrate Pipeline Components - End-to-End Pipeline**
+   - Combine Router → Decomposer → Jury into complete pipeline
+   - Status: To Do
+
+See Jira project: https://jahid-ahmadi-student.atlassian.net/browse/TQ
