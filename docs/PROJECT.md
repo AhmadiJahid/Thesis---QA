@@ -77,4 +77,9 @@ Completed Jira tasks must be reflected in:
    - Combine Router → Decomposer → Jury into complete pipeline
    - Status: To Do
 
+5. **[TQ-5] Implement Results Visualization and Analysis Agent**
+   - Analyze run results, generate visualizations, create presentable reports
+   - Script: `scripts/analyze_runs.py`
+   - Status: To Do
+
 See Jira project: https://jahid-ahmadi-student.atlassian.net/browse/TQ

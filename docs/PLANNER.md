@@ -32,6 +32,207 @@ and concrete work must become Jira tasks.
 
 ## Current Topics (active)
 
+### Topic: Code Analyzer Rule for Generated Notebooks
+**Goal / question:**  
+Create a Cursor rule file (`.mdc`) that defines how to analyze/review generated notebook code for quality, logic, and correctness.
+
+**Context:**  
+- We generate code/notebooks for Router, Decomposer, Jury components
+- Code is generated in Cursor but executed on Kaggle
+- Need a rule file (like `python-notebook-kaggle.mdc`) that guides code review
+- When notebooks are generated, the analyzer rule should be used to review them
+
+**What we know:**  
+- Should be a `.mdc` file in `.cursor/rules/` directory
+- Should provide guidelines for reviewing generated `.ipynb` files
+- Focus: Code quality, logic, and correctness
+- Should output structured feedback/reviews
+
+**Decision:** ✅ **DECIDED**
+- Create `.cursor/rules/code-analyzer.mdc` file
+- Analyzer checks: code quality, logic errors, correctness
+- Provides structured review feedback
+- Used automatically when reviewing generated notebooks
+
+**Proposed next step:**  
+Create the `code-analyzer.mdc` rule file
+
+---
+
+### Topic: Router Component Performance Analysis (Run 20251215_040826)
+**Goal / question:**  
+Evaluate Router component performance after fixing data leakage and prompt overengineering. Determine if accuracy is acceptable to proceed to Decomposer (TQ-2).
+
+**Context:**  
+- Run ID: 20251215_040826
+- Model: Qwen/Qwen2.5-1.5B-Instruct
+- Fixed issues: Removed test data from prompt examples, simplified prompt structure
+- Dataset: 90 questions (30 per hop count) from MetaQA
+
+**Results:**
+- Overall Accuracy: 77.78% (70/90)
+- 1-hop Accuracy: 100% (30/30) ✅
+- 2-hop Accuracy: 63.33% (19/30) ⚠️
+- 3-hop Accuracy: 70% (21/30) ✅
+
+**Error Patterns (from detailed_results.json):**
+- 2-hop errors (11/30 wrong):
+  - Predicted as 1-hop: 4 cases (e.g., "who appeared in the same movie with Angie Everhart", "what genres do the films starred by Al St. John fall under")
+  - Predicted as 3-hop: 7 cases (e.g., "who are movie co-directors of Delbert Mann", "the director of The Brown Bunny also directed which movies")
+- 3-hop errors (9/30 wrong):
+  - Mostly predicted as 2-hop (pattern: model underestimates complexity)
+  - Some edge cases with "same" or "also" patterns
+
+**What we know:**  
+- 1-hop classification is perfect (100%)
+- 3-hop improved significantly from 13.33% → 70% after fixing data leakage
+- 2-hop is the weakest (63.33%), with confusion between 1-hop and 3-hop
+- Model tends to overestimate 2-hop as 3-hop when "also" or "same" appears
+- Model underestimates some 2-hop as 1-hop when question structure is simple
+
+**What we don't know:**  
+- Is 77.78% overall accuracy acceptable for downstream Decomposer?
+- Will 2-hop misclassification significantly impact Decomposer performance?
+- Should we iterate more on Router or accept current performance?
+
+**Options:**
+- Option A: Accept current performance (77.78%) and proceed to Decomposer (TQ-2)
+  - Pros: 1-hop perfect, 3-hop good, overall reasonable
+  - Cons: 2-hop weak, may propagate errors to Decomposer
+- Option B: Iterate on Router prompt to improve 2-hop accuracy
+  - Pros: Better accuracy before moving forward
+  - Cons: More time, diminishing returns
+- Option C: Proceed to Decomposer but monitor Router errors in pipeline
+  - Pros: Move forward while tracking impact
+  - Cons: May need to revisit Router later
+
+**Risks / failure modes:**  
+- If Router misclassifies, Decomposer receives wrong hop count → wrong decomposition
+- 2-hop questions misclassified as 3-hop may cause Decomposer to over-decompose
+- 2-hop questions misclassified as 1-hop may cause Decomposer to under-decompose
+
+**Decision needed by:**  
+User to decide if 77.78% is acceptable or if we should iterate more
+
+**Proposed next step:**  
+- If acceptable: Proceed to Decomposer component (TQ-2)
+- If not: Analyze 2-hop error patterns more deeply, refine prompt with better examples
+
+---
+
+### Topic: Results Visualization and Analysis Agent
+**Goal / question:**  
+Create an agent/component that analyzes run results, generates figures/plots, and creates presentable reports for professor presentation.
+
+**Context:**  
+- Multiple runs exist in `runs/router/` directory (e.g., 20251215_031710, 20251215_035343, 20251215_040826)
+- Each run contains: `metrics.json`, `detailed_results.json`, `config.json`, `notes.md`
+- Need to compare runs, show trends, visualize performance
+- Some runs may be archived (folders named "archive" should be ignored)
+- Output should be presentable for academic presentation
+
+**What we know:**  
+- Run structure: `runs/<component>/<run_id>/` with standardized artifacts
+- Metrics include: overall accuracy, per-hop accuracy, model info, seed
+- Detailed results include: question, expected_hop, predicted_hop, correct
+- Need to skip "archive" folders
+
+**Decision:** ✅ **DECIDED**
+- **Output format:** Local Python script (Option B) - easier to iterate, can generate HTML/PDF
+- **Execution:** Can also work as Kaggle notebook if needed (flexible)
+- **Scope:** All runs except folders named exactly "archived"
+- **Archive detection:** Exact match - folders named "archived" (case-sensitive)
+
+**Recommended Visualizations (for professor presentation):**
+1. **Overall Accuracy Comparison** (bar chart)
+   - Compare all runs side-by-side
+   - Shows improvement over iterations
+   - Essential for showing progress
+
+2. **Per-Hop Accuracy Trends** (line/bar chart)
+   - 1-hop, 2-hop, 3-hop accuracy across runs
+   - Shows which hop counts are challenging
+   - Critical for understanding model behavior
+
+3. **Confusion Matrices** (heatmap, one per run)
+   - Shows misclassification patterns
+   - Helps identify systematic errors
+   - Academic standard for classification tasks
+
+4. **Error Pattern Summary** (table or bar chart)
+   - Most common error types (e.g., "2-hop → 3-hop", "2-hop → 1-hop")
+   - Shows what the model struggles with
+   - Useful for identifying improvement areas
+
+5. **Model/Config Comparison** (if different models used)
+   - Compare performance across model variants
+   - Shows impact of model choice
+
+**Visualizations to skip (too detailed for presentation):**
+- Individual question-level errors (too granular)
+- Timeline view (if runs are close in time, not meaningful)
+- Raw detailed results (can be in appendix)
+
+**Output Structure:**
+- HTML report with embedded plots (easy to view, can convert to PDF)
+- Save plots as PNG files for potential use in slides
+- Include summary statistics table
+- Keep it concise (5-7 visualizations max for presentation)
+
+**Risks / failure modes:**  
+- Archive detection might miss variations (e.g., "archived", "old")
+- Too many visualizations might overwhelm
+- Missing run data might cause errors
+- Different run structures might break parsing
+
+**Decision:** ✅ **DECIDED**
+- **Output format:** Local Python script (Option B) - easier to iterate, can generate HTML/PDF
+- **Execution:** Can also work as Kaggle notebook if needed (flexible)
+- **Scope:** All runs except folders named exactly "archived"
+- **Archive detection:** Exact match - folders named "archived" (case-sensitive)
+
+**Recommended Visualizations (for professor presentation):**
+1. **Overall Accuracy Comparison** (bar chart)
+   - Compare all runs side-by-side
+   - Shows improvement over iterations
+   - Essential for showing progress
+
+2. **Per-Hop Accuracy Trends** (line/bar chart)
+   - 1-hop, 2-hop, 3-hop accuracy across runs
+   - Shows which hop counts are challenging
+   - Critical for understanding model behavior
+
+3. **Confusion Matrices** (heatmap, one per run)
+   - Shows misclassification patterns
+   - Helps identify systematic errors
+   - Academic standard for classification tasks
+
+4. **Error Pattern Summary** (table or bar chart)
+   - Most common error types (e.g., "2-hop → 3-hop", "2-hop → 1-hop")
+   - Shows what the model struggles with
+   - Useful for identifying improvement areas
+
+5. **Model/Config Comparison** (if different models used)
+   - Compare performance across model variants
+   - Shows impact of model choice
+
+**Visualizations to skip (too detailed for presentation):**
+- Individual question-level errors (too granular)
+- Timeline view (if runs are close in time, not meaningful)
+- Raw detailed results (can be in appendix)
+
+**Output Structure:**
+- HTML report with embedded plots (easy to view, can convert to PDF)
+- Save plots as PNG files for potential use in slides
+- Include summary statistics table
+- Keep it concise (5-7 visualizations max for presentation)
+
+**Decision:** ✅ **DECIDED** - Moved to DECISIONS.md on 2025-12-15
+**Proposed next step:**  
+Script created. Create Jira task TQ-5 for tracking.
+
+---
+
 ### Topic: Multi-hop Question Decomposition Pipeline
 **Goal / question:**  
 Build a 3-stage pipeline to decompose multi-hop questions (1-hop, 2-hop, 3-hop) from MetaQA dataset into sub-questions for KG-augmented QA.
