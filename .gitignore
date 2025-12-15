@@ -1,0 +1,51 @@
+# ===== Thesis: keep the repo clean =====
+
+# Run artifacts (never commit)
+runs/
+run/
+outputs/
+output/
+
+# Data (MetaQA lives in DATA/ locally; keep it out of git by default)
+DATA/
+data/
+
+# Jupyter
+.ipynb_checkpoints/
+**/.ipynb_checkpoints/
+
+# Python caches
+__pycache__/
+**/__pycache__/
+*.py[cod]
+*.pyo
+
+# Virtual environments
+.venv/
+venv/
+env/
+ENV/
+
+# Packaging / build
+build/
+dist/
+*.egg-info/
+.eggs/
+
+# Logs
+*.log
+
+# OS / editor junk
+.DS_Store
+Thumbs.db
+
+# Cursor / IDE
+.cursor/logs/
+.vscode/
+.idea/
+
+# Kaggle artifacts / downloads (optional)
+*.zip
+*.tar
+*.tar.gz
+*.7z

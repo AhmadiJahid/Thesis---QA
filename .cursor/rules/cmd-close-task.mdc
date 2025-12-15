@@ -1,0 +1,25 @@
+---
+description: "Manual command: close a Jira task properly (Jira update + changelog + project brief refresh)."
+alwaysApply: false
+---
+
+## @cmd-close-task
+
+When invoked with a Jira key:
+1) Summarize what was completed in 3–8 bullets (no fluff).
+2) Update the Jira issue via Atlassian MCP:
+   - add a completion comment (the summary)
+   - transition to Done (or equivalent), if permitted
+
+3) Update docs:
+   - Append a new entry to `docs/CHANGELOG.md`:
+     - date, Jira key, title
+     - summary bullets
+     - GitHub: commit hash (or branch name) if available; else n/a
+   - Update `docs/PROJECT.md` ONLY if project state changed (pipeline, structure, run method, conventions).
+
+Optional:
+- If the task involved a key decision, add a short entry to `docs/DECISIONS.md`.
+
+Constraints:
+- Do NOT invent PR links or commits. If none exist, write “GitHub: n/a”.

@@ -1,0 +1,27 @@
+---
+description: "Manual command: sync Jira tasks, propose next actions, and keep PROJECT.md Next Up aligned."
+alwaysApply: false
+---
+
+## @cmd-sync-jira
+
+Goal: Make Jira → execution loop frictionless.
+
+When invoked:
+1) Use Atlassian MCP to fetch Thesis-related Jira issues:
+   - statuses: To Do, In Progress, Blocked (or your equivalents)
+   - include key, title, status, priority, assignee, last updated
+
+2) If issues exist:
+   - Propose the top 1–3 tasks to work on next (ranked).
+   - For each: give a brief rationale and a crisp “Definition of Done” (3–7 bullets).
+   - Update `docs/PROJECT.md` section “Next Up (from Jira)” to reflect the ranked list.
+
+3) If no issues exist:
+   - Propose a short plan discussion (2–5 bullet agenda).
+   - Draft 2–4 Jira issues (titles + descriptions + acceptance criteria).
+   - After creation, update `docs/PROJECT.md` “Next Up” with the newly created issues.
+
+Constraints:
+- Do NOT write implementation code during sync.
+- Do NOT mark work as done unless Jira says it’s done.

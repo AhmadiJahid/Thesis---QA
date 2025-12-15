@@ -1,0 +1,44 @@
+---
+description: "Python + notebook configuration for thesis: Kaggle-first execution, notebook cell structure, reproducibility, and artifact conventions."
+alwaysApply: false
+---
+
+## Python + Notebook + Kaggle conventions (Thesis)
+
+### Execution model
+- We generate code in Cursor but execute on Kaggle (no local GPU assumed).
+- Default deliverable for runnable work is a Jupyter Notebook (`.ipynb`), not a standalone script, unless user asks otherwise.
+
+### Notebook structure (required)
+When creating a notebook, organize into small copy/paste-friendly sections:
+1) Title + goal (markdown)
+2) Environment + versions (python, torch, transformers)
+3) Config cell (dataset paths, model id, hyperparams, seed)
+4) Data loading (placeholder if not implementing yet)
+5) Model setup
+6) Run / inference / training loop
+7) Evaluation + metrics
+8) Save artifacts
+
+### Kaggle filesystem assumptions
+- Read-only inputs: `/kaggle/input/...`
+- Writable outputs: `/kaggle/working/`
+- Save run artifacts under: `/kaggle/working/runs/<run_id>/`
+
+### Reproducibility requirements
+- Always include a `seed` in config.
+- Log/print the seed and key package versions.
+- Save artifacts per run:
+  - `metrics.json`
+  - `notes.md` (short: what changed, what you ran, what to check)
+  - a config snapshot (yaml/json) if configs are used
+
+### Python style
+- Prefer clean functions even inside notebooks to keep cells readable.
+- Avoid huge monolithic cells.
+- Use `pathlib.Path` for paths.
+- Use standard `logging` (or consistent prints only in notebooks).
+
+### Output discipline
+- Do NOT generate code unless the user explicitly asks for code or asks for a notebook.
+- If user is discussing configuration/rules, respond with rule text and steps only.

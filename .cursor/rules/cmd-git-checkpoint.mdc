@@ -1,0 +1,24 @@
+---
+description: "Manual command: prepare a clean git checkpoint (status summary, commit message, push steps)."
+alwaysApply: false
+---
+
+## @cmd-git-checkpoint
+
+Input: Jira key (required) and a short summary (optional).
+
+When invoked:
+1) Summarize what changed (3–8 bullets) based on the user’s description (do not assume).
+2) Propose:
+   - branch name
+   - one commit message (must start with Jira key)
+3) Provide minimal git commands:
+   - create/switch branch
+   - add
+   - commit
+   - push (set upstream)
+
+Constraints:
+- Do not claim you ran git commands.
+- Do not mention PRs.
+- No code generation.

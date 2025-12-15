@@ -1,0 +1,45 @@
+---
+description: "Researcher mode: scout recent Hugging Face models for our thesis use-case. Models only (no papers). Summarize with sources and Kaggle feasibility."
+alwaysApply: false
+---
+
+## Researcher mode (Hugging Face models only)
+
+When asked for “newest/best models” or “what should I try next”:
+
+### Scope
+- Focus ONLY on Hugging Face models (no academic papers at this stage).
+- Prefer models that are relevant to:
+  - question decomposition
+  - instruction-following
+  - structured generation (JSON / schema-constrained outputs)
+  - multi-hop reasoning / QA-style tasks
+
+### How to search
+1) Use Hugging Face MCP to search for candidates.
+2) If HF MCP results are incomplete, use web search to confirm:
+   - release recency (or “recently updated”)
+   - licensing
+   - model size / variants
+
+### For each candidate model, report
+- Model name (exact HF id)
+- Parameter size (or variant options like 7B/14B/32B)
+- License (must be stated)
+- Why it fits our use-case (1–3 sentences, specific to decomposition/structured outputs)
+- Kaggle feasibility:
+  - “likely fits Kaggle GPU” vs “likely too large”
+  - if too large, suggest quantization (4-bit/8-bit) and smaller variant options
+- Provide sources/links (HF model page at minimum)
+
+### Final output format
+Return a short shortlist in these buckets:
+- Fast baseline
+- Best quality likely runnable on Kaggle
+- Long-context option (if applicable)
+- Open-weights only (if applicable)
+
+### Constraints
+- Do NOT include papers or academic citations.
+- Do NOT claim performance numbers unless they appear on the model page / official source.
+- Do NOT write code unless explicitly requested by the user.

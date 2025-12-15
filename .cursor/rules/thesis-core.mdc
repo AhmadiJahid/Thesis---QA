@@ -1,0 +1,30 @@
+---
+description: "Core rules for the Thesis repo: reproducibility, traceability, no fabricated results."
+alwaysApply: true
+---
+
+## Thesis Core Rules (Always Apply)
+
+### Truth + reproducibility
+- Never fabricate numbers, results, citations, dataset sizes, or benchmarks.
+- If something is unknown, explicitly mark it as unknown and propose how to measure it.
+- Any new experiment code must:
+  - accept `--seed`
+  - log config + seed
+  - write metrics to a machine-readable file (JSON)
+  - save a short run summary (markdown or txt)
+
+### Code hygiene
+- Prefer clear, boring code over clever code.
+- Don’t add dependencies unless necessary. If added, justify in PR text.
+- Avoid “magic constants”: promote to config.
+
+### Tracking
+- Work should map to an issue/PR. If user asks “do X”, respond with an issue checklist mindset:
+  - definition of done
+  - files to touch
+  - tests / smoke check
+
+### Output discipline
+- `runs/` is output-only and should be gitignored.
+- Keep `docs/` up-to-date when behavior changes.

@@ -1,0 +1,37 @@
+---
+description: "GitHub sync workflow for Thesis: branch naming, commits, push/pull checkpoints. No PRs."
+alwaysApply: true
+---
+
+## GitHub sync workflow (Always)
+
+### No PR policy
+- Do NOT create pull requests.
+- Use direct branch pushes and merges as needed.
+
+### Branching
+- One branch per Jira task.
+- Branch format: `thesis/<JIRA-KEY>-<short-slug>`
+  - Example: `thesis/THESIS-12-researcher-mode`
+
+### Commits
+- Commit messages must start with the Jira key:
+  - `<JIRA-KEY>: <short message>`
+  - Example: `THESIS-12: add kaggle notebook rule`
+
+### Pushing checkpoints
+- Push whenever you reach a coherent checkpoint:
+  - rules/docs added
+  - repo structure stabilized
+  - a task’s acceptance criteria met
+- Never commit run outputs:
+  - `runs/` must be ignored
+  - also ignore `.venv/`, `__pycache__/`, `.ipynb_checkpoints/`
+
+### Jira linking
+- When pushing a checkpoint that completes a Jira task, add a short completion comment to the Jira issue (summary of what changed).
+- Then close the task using @cmd-close-task.
+
+### Constraints
+- Do NOT claim git operations were executed. Provide the minimal commands/instructions only.
+- Do NOT generate implementation code unless explicitly requested by the user.
