@@ -16,6 +16,9 @@ Optimize for: reproducibility, traceability, and correctness.
 - `configs/` contains YAML/JSON configs for runs.
 - `runs/` is output-only (ignored by git). Store run artifacts there.
 - `docs/` contains thesis notes, methodology, and literature review.
+- Code is authored here and executed primarily as Kaggle notebooks; see `.cursor/rules/python-notebook-kaggle.mdc` for notebook conventions.
+
+Also see `.cursor/rules/thesis-core.mdc` for always-on rules about seeds, metrics, and run artifacts.
 
 ## Issue hygiene
 - Track work via Jira issues (Atlassian MCP).
@@ -32,4 +35,4 @@ Optimize for: reproducibility, traceability, and correctness.
 - When discussing methods, define terms briefly on first use (e.g., “entity linking”, “multi-hop”).
 
 ### Output discipline
-- Do NOT generate code unless the user explicitly asks for code or asks for a notebook.
+- Do NOT generate code unless the user explicitly asks for code or asks for a notebook. This applies to all agents (including planner/research modes) unless the user explicitly changes the request.

@@ -18,12 +18,16 @@
 - Evaluation: TBD
 
 ### Current status (1–5 lines)
-- [PLACEHOLDER: What works today? What’s the latest runnable thing?]
+- Initial Router experiments (e.g., run `20251215_040826` using Qwen/Qwen2.5-1.5B-Instruct) achieved 77.78% overall hop-count accuracy on a 90-question MetaQA sample; 1-hop is strong, 2-hop remains weakest.
+- Decomposer and Jury components are not yet implemented; notebooks are planned but not runnable.
+- Results visualization script `scripts/analyze_runs.py` exists for Router runs but is not yet wired into a full pipeline.
 
 ---
 
 ## Repo Structure
 
+- `components/` — component-specific assets (router/decomposer/jury)
+- `components/<component>/models/` — per-model prompt + config for that component
 - `src/` — core library code
 - `scripts/` — entrypoints / CLIs (optional; Kaggle-first)
 - `notebooks/` — Kaggle-ready notebooks (primary execution artifacts)

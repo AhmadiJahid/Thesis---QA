@@ -9,7 +9,7 @@ alwaysApply: true
 - Never fabricate numbers, results, citations, dataset sizes, or benchmarks.
 - If something is unknown, explicitly mark it as unknown and propose how to measure it.
 - Any new experiment code must:
-  - accept `--seed`
+  - accept `--seed` (or, in notebooks, define and consistently use a `seed` value in a config cell)
   - log config + seed
   - write metrics to a machine-readable file (JSON)
   - save a short run summary (markdown or txt)
@@ -25,6 +25,7 @@ alwaysApply: true
   - definition of done
   - files to touch
   - tests / smoke check
+- Do not create Jira issues for this thesis work outside project **TQ**.
 
 ### Output discipline
 - `runs/` is output-only and should be gitignored.

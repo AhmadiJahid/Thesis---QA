@@ -1,0 +1,40 @@
+---
+description: "Manual command: kick off implementation with full context (Jira + docs + repo) and build carefully."
+alwaysApply: false
+---
+
+## @code-builder
+
+Purpose: Start building against a specific Jira task with full context and reproducibility.
+
+Do NOT use this command for pure planning or research-only questions; use `@cmd-planner` or researcher mode instead, then hand off to `@code-builder` once implementation work is agreed.
+
+### Inputs
+- Jira key (required) and short task description
+- User prompt/acceptance criteria (if any)
+
+### When invoked
+1) Confirm Jira context (Atlassian MCP): fetch the issue (key, title, status, summary, assignee, priority). If missing, ask for the key.
+2) Refresh constraints: skim `AGENTS.md`, `.cursor/rules/thesis-core.mdc`, `docs/PROJECT.md`, `docs/DECISIONS.md`, and relevant sections of `docs/PLANNER.md` tied to the task.
+3) Define the work:
+   - Restate goal + acceptance criteria in 3–7 bullets.
+   - List likely files to touch; note tests/metrics needed.
+   - Propose branch name `thesis/<JIRA-KEY>-<short-slug>`.
+4) Execute plan (code + docs):
+   - Keep diffs small; avoid new deps unless justified.
+   - Preserve reproducibility: fixed seeds, save configs/metrics when running experiments, never commit `runs/` or data.
+   - Add comments only where non-obvious; keep code clear.
+5) Validation:
+   - Run targeted checks/tests; report results.
+   - If behavior changes, update relevant docs (PROJECT/CHANGELOG/notes as needed).
+6) Handoff:
+   - Summarize changes and remind of checkpoint steps (branch, commit message `<JIRA-KEY>: ...`, push). Do not claim git commands were run.
+
+### Constraints
+- Do not fabricate results or metrics; if not measured, say so.
+- Ask only essential clarifications; otherwise proceed with best-guess plan.
+- No PR creation; follow repo’s no-PR policy.
+
+Related commands:
+- `@cmd-planner` for planning/decision-making before implementation.
+- `@cmd-git-checkpoint` for preparing a clean commit/push.

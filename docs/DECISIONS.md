@@ -2,6 +2,8 @@
 
 Keep this short. Only record decisions that prevent re-litigating choices.
 
+If this file and `docs/PLANNER.md` ever disagree, this file is the authoritative source.
+
 Template:
 ## YYYY-MM-DD — Decision title
 **Context:**  
@@ -9,6 +11,26 @@ Template:
 **Why:**  
 **Tradeoffs:**  
 **Consequences / Follow-up:**
+
+---
+
+## 2026-01-21 — Component model folders and prompt templates
+**Context:**  
+Need a consistent way to expand notebooks with multiple small models and keep per-model prompts, configs, and outputs organized for later analysis.
+
+**Decision:**  
+- Store per-model assets under `components/<component>/models/<model_name>/`.
+- Standardize `prompt.md` and `config.json` per model to keep prompt strategy and decoding settings explicit.
+
+**Why:**  
+- Keeps model experiments organized by component.
+- Makes prompt and decoding choices reproducible across Kaggle and Colab runs.
+
+**Tradeoffs:**  
+- Extra folder overhead for each model.
+
+**Consequences / Follow-up:**  
+- Update notebooks to reference the new prompt/config files as models are added.
 
 ---
 

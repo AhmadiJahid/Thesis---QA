@@ -28,3 +28,11 @@ When invoked:
 Constraints:
 - Do NOT write implementation code during sync.
 - Do NOT mark work as done unless Jira says it’s done.
+
+When NOT to use:
+- For deep planning/architecture discussions: prefer `@cmd-planner`.
+- For starting implementation on a specific Jira task: prefer `@code-builder`.
+
+Related commands:
+- `@start-project` to refresh overall context before syncing.
+- `@cmd-planner` to turn Jira items into concrete plans/decisions.

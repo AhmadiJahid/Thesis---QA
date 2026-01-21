@@ -1,0 +1,29 @@
+---
+description: "Manual command: refresh project context (docs + Jira + git) so the agent is on track."
+alwaysApply: false
+---
+
+## @start-project
+
+Purpose: Quickly sync the agent with the current state (docs, Jira, recent commits) before doing any work.
+
+### When invoked
+1) Read key docs (skim, don’t rewrite): `AGENTS.md`, `.cursor/rules/thesis-core.mdc`, `docs/PROJECT.md`, `docs/DECISIONS.md`, `docs/CHANGELOG.md` (latest entry), `docs/PLANNER.md` (Current Topics).
+2) Sync Jira (Atlassian MCP) for project **TQ** (Cloud ID `f97c7789-c9f8-4559-97e4-18d9d8c3845f`):
+   - fetch To Do / In Progress / Blocked issues with key, title, status, priority, assignee, updated.
+3) Inspect recent git history: show the latest 5 commits (hash, author, date, subject).
+4) Report back concisely:
+   - current objectives / open Jira tasks (ranked if possible)
+   - recent work (from changelog + git log)
+   - invariants/constraints from AGENTS + thesis-core (repro, seeds, artifacts)
+   - immediate next 1–3 steps to continue
+5) Ask only for missing essentials; otherwise proceed with best-guess next step.
+
+### Constraints
+- No implementation code or file edits in this command.
+- Do not fabricate metrics, results, or Jira status.
+- Keep output brief and actionable (bullets preferred).
+
+Related commands:
+- `@cmd-sync-jira` to align Jira tasks with `docs/PROJECT.md`.
+- `@code-builder` to start implementation for a specific Jira task.

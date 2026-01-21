@@ -12,12 +12,12 @@ alwaysApply: true
 ### Branching
 - One branch per Jira task.
 - Branch format: `thesis/<JIRA-KEY>-<short-slug>`
-  - Example: `thesis/THESIS-12-researcher-mode`
+  - Example: `thesis/TQ-12-researcher-mode`
 
 ### Commits
 - Commit messages must start with the Jira key:
   - `<JIRA-KEY>: <short message>`
-  - Example: `THESIS-12: add kaggle notebook rule`
+  - Example: `TQ-12: add kaggle notebook rule`
 
 ### Pushing checkpoints
 - Push whenever you reach a coherent checkpoint:
@@ -27,6 +27,7 @@ alwaysApply: true
 - Never commit run outputs:
   - `runs/` must be ignored
   - also ignore `.venv/`, `__pycache__/`, `.ipynb_checkpoints/`
+  - See `.cursor/rules/thesis-core.mdc` for experiment output and `runs/` conventions.
 
 ### Jira linking
 - When pushing a checkpoint that completes a Jira task, add a short completion comment to the Jira issue (summary of what changed).

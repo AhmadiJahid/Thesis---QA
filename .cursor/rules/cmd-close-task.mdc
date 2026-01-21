@@ -23,3 +23,11 @@ Optional:
 
 Constraints:
 - Do NOT invent PR links or commits. If none exist, write “GitHub: n/a”.
+
+When NOT to use:
+- For deciding scope or design of a task: use `@cmd-planner`.
+- For preparing a commit before closing: use `@cmd-git-checkpoint`.
+
+Related commands:
+- `@cmd-git-checkpoint` to prepare commit and push instructions.
+- `@cmd-sync-jira` to ensure Jira reflects current work before closing.

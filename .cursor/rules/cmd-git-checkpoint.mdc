@@ -22,3 +22,11 @@ Constraints:
 - Do not claim you ran git commands.
 - Do not mention PRs.
 - No code generation.
+
+When NOT to use:
+- For deciding *what* to build next or how: use `@cmd-planner` or `@start-project`.
+- For actually implementing changes: use `@code-builder`.
+
+Related commands:
+- `@code-builder` to perform implementation work tied to a Jira key.
+- `@cmd-close-task` to close out a Jira issue and update docs once changes are merged.

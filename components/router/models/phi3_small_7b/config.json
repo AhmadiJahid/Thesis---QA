@@ -1,0 +1,12 @@
+{
+  "component": "router",
+  "model_name": "phi3_small_7b",
+  "model_id": "",
+  "prompt_file": "prompt.md",
+  "decoding": {
+    "do_sample": false,
+    "temperature": 0.0,
+    "top_p": 1.0
+  },
+  "notes": ""
+}

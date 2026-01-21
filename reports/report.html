@@ -1,0 +1,107 @@
+
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Router Component Analysis Report</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 20px;
+            line-height: 1.6;
+        }
+        h1 {
+            color: #2c3e50;
+            border-bottom: 3px solid #3498db;
+            padding-bottom: 10px;
+        }
+        h2 {
+            color: #34495e;
+            margin-top: 30px;
+        }
+        img {
+            max-width: 100%;
+            height: auto;
+            margin: 20px 0;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+        }
+        table {
+            font-size: 14px;
+        }
+        th {
+            background-color: #3498db;
+            color: white;
+            padding: 10px;
+            text-align: left;
+        }
+        td {
+            padding: 8px;
+            border: 1px solid #ddd;
+        }
+        tr:nth-child(even) {
+            background-color: #f2f2f2;
+        }
+        .section {
+            margin: 40px 0;
+            padding: 20px;
+            background-color: #f9f9f9;
+            border-radius: 5px;
+        }
+    </style>
+</head>
+<body>
+    <h1>Router Component Performance Analysis Report</h1>
+    <p><strong>Generated:</strong> 2025-12-15 08:07:20</p>
+    <p><strong>Total Runs Analyzed:</strong> 2</p>
+    
+    <div class="section">
+        <h2>Summary Statistics</h2>
+        <table border='1' style='border-collapse: collapse; width: 100%; margin: 20px 0;'>
+<tr><th>Run ID</th><th>Overall Accuracy</th><th>1-hop</th><th>2-hop</th><th>3-hop</th><th>Model</th><th>Total Questions</th></tr>
+<tr><td>20251215_031710</td><td>55.56%</td><td>73.33%</td><td>0.00%</td><td>93.33%</td><td>Qwen/Qwen2.5-0.5B-Instruct</td><td>90</td></tr>
+<tr><td>20251215_042826</td><td>78.89%</td><td>100.00%</td><td>46.67%</td><td>90.00%</td><td>Qwen/Qwen2.5-1.5B-Instruct</td><td>90</td></tr>
+</table>
+    </div>
+    
+    <div class="section">
+        <h2>Overall Accuracy Comparison</h2>
+        <img src='overall_accuracy.png' alt='Overall Accuracy Comparison'>
+    </div>
+    
+    <div class="section">
+        <h2>Per-Hop Accuracy Trends</h2>
+        <img src='per_hop_accuracy.png' alt='Per-Hop Accuracy Comparison'>
+    </div>
+    
+    <div class="section">
+        <h2>Error Pattern Summary</h2>
+        <img src='error_patterns.png' alt='Error Patterns'>
+    </div>
+    
+    <div class="section">
+        <h2>Confusion Matrices</h2>
+        
+        <div style='margin: 30px 0;'>
+            <h3>Confusion Matrix - 20251215_031710 (Qwen2.5-0.5B)</h3>
+            <img src='confusion_matrix_20251215_031710.png' alt='Confusion Matrix 20251215_031710' style='max-width: 100%;'>
+        </div>
+        
+        <div style='margin: 30px 0;'>
+            <h3>Confusion Matrix - 20251215_042826 (Qwen2.5-1.5B)</h3>
+            <img src='confusion_matrix_20251215_042826.png' alt='Confusion Matrix 20251215_042826' style='max-width: 100%;'>
+        </div>
+        
+    </div>
+    
+    <div class="section">
+        <h2>Notes</h2>
+        <ul>
+            <li>Runs in "archived" folders are excluded from analysis</li>
+            <li>All accuracy values are percentages</li>
+            <li>Confusion matrices show actual vs predicted hop counts</li>
+        </ul>
+    </div>
+</body>
+</html>

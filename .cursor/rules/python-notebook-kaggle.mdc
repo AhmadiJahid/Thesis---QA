@@ -5,6 +5,8 @@ alwaysApply: false
 
 ## Python + Notebook + Kaggle conventions (Thesis)
 
+Apply this rule whenever the user requests a runnable experiment or notebook, or when converting existing code into a Kaggle-ready notebook.
+
 ### Execution model
 - We generate code in Cursor but execute on Kaggle (no local GPU assumed).
 - Default deliverable for runnable work is a Jupyter Notebook (`.ipynb`), not a standalone script, unless user asks otherwise.
@@ -42,3 +44,4 @@ When creating a notebook, organize into small copy/paste-friendly sections:
 ### Output discipline
 - Do NOT generate code unless the user explicitly asks for code or asks for a notebook.
 - If user is discussing configuration/rules, respond with rule text and steps only.
+- When in doubt, briefly ask whether the user wants a notebook, pure planning, or just configuration changes before generating code.

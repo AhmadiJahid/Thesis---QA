@@ -1,0 +1,53 @@
+---
+description: "Code analyzer rules for reviewing generated notebook code: quality, logic, and correctness checks."
+alwaysApply: true
+---
+
+## Code Analyzer Rules (Always Apply)
+
+When reviewing generated notebook code (`.ipynb` files), check the following:
+
+### Code Quality Checks
+- **Error handling:** Are exceptions caught appropriately? Are there try/except blocks where needed?
+- **Variable usage:** Are variables initialized before use? Are they used consistently?
+- **Function calls:** Are function arguments correct? Are return values handled properly?
+- **Code organization:** Are functions clean and focused? Are cells not too large/monolithic?
+- **Best practices:** Avoid hardcoded values, use pathlib.Path for paths, proper logging/printing
+
+### Logic Checks
+- **Control flow:** Are if/else conditions logical? Are loops properly structured?
+- **Data flow:** Do variables flow correctly through the code? Are intermediate results used correctly?
+- **Algorithm correctness:** Does the logic match the intended behavior? Are edge cases handled?
+- **Type consistency:** Are types used consistently? Are there potential type mismatches?
+
+### Correctness Checks
+- **Imports:** Are all required imports present? Are they used correctly?
+- **API usage:** Are library functions called with correct parameters? Are return values handled?
+- **Configuration:** Are config values used correctly? Are paths and settings valid?
+- **Model usage:** Is the model loaded correctly? Are tokenizers and models used together properly?
+- **Device handling:** Is CUDA/CPU device handling correct? Are tensors moved to correct device?
+- **Run artifacts:** Does the notebook follow run conventions from `thesis-core.mdc` / `python-notebook-kaggle.mdc` (seed logged, `metrics.json`, `notes.md`, and config snapshot if applicable)?
+
+### Review Output Format
+When providing code review feedback:
+1. **Summary:** Overall assessment (pass/fail or quality score)
+2. **Issues found:** List of specific problems with:
+   - Location (cell number, line if applicable)
+   - Issue type (logic error, quality issue, bug, etc.)
+   - Severity (critical, warning, suggestion)
+   - Description of the issue
+   - Suggested fix (if applicable)
+3. **Positive notes:** What's done well (optional but helpful)
+
+### When to Review
+- Automatically review generated notebooks when they are created or modified
+- Focus on code cells (not markdown cells unless they contain code examples)
+- Review the entire notebook structure and flow
+
+If the notebook is intentionally partial (e.g., some stages are placeholders), focus feedback on implemented sections and treat missing parts as suggestions rather than critical errors.
+
+### Constraints
+- Be specific: Point to exact locations and issues
+- Be constructive: Provide actionable suggestions
+- Be balanced: Note both issues and what's correct
+- Don't be overly strict: Focus on real issues, not style preferences

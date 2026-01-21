@@ -7,6 +7,8 @@ alwaysApply: false
 
 Purpose: Run a planning session that stays aligned with our workflow.
 
+Do NOT use this command for implementing code or notebooks; once decisions are made, switch to `@code-builder` for implementation.
+
 ### Inputs
 - A topic title (required)
 - Optional: brief prompt/context, constraints, options you’re considering
@@ -48,3 +50,7 @@ Purpose: Run a planning session that stays aligned with our workflow.
 - Do NOT write implementation code or notebooks in this command.
 - Do NOT fabricate results, model performance, dataset stats, or citations.
 - Do NOT mark work as done unless Jira is updated accordingly.
+
+Related commands:
+- `@start-project` to refresh context before planning.
+- `@code-builder` to implement decisions as code/notebooks.
