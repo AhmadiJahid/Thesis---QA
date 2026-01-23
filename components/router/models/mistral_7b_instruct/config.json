@@ -1,7 +1,7 @@
 {
   "component": "router",
   "model_name": "mistral_7b_instruct",
-  "model_id": "",
+  "model_id": "mistralai/Mistral-7B-Instruct-v0.3",
   "prompt_file": "prompt.md",
   "decoding": {
     "do_sample": false,

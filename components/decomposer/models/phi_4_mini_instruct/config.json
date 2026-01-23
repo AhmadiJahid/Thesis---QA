@@ -1,0 +1,11 @@
+{
+  "component": "decomposer",
+  "model_name": "phi_4_mini_instruct",
+  "model_id": "microsoft/Phi-4-mini-instruct",
+  "prompt_file": "prompt.md",
+  "decoding": {
+    "do_sample": false,
+    "temperature": 0.0,
+    "top_p": 1.0
+  }
+}

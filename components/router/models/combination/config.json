@@ -1,0 +1,52 @@
+{
+    "model_name": "ensemble_argmax_logprob",
+    "prompt_file": "prompt.md",
+  
+    "labels": ["1", "2", "3"],
+  
+    "models": [
+      {
+        "name": "qwen2_5_3b_instruct",
+        "model_id": "Qwen/Qwen2.5-3B-Instruct",
+        "torch_dtype": "float16",
+        "trust_remote_code": true,
+        "device_map": "auto"
+      },
+      {
+        "name": "phi_4_mini_instruct",
+        "model_id": "microsoft/Phi-4-mini-instruct",
+        "torch_dtype": "float16",
+        "trust_remote_code": true,
+        "device_map": "auto"
+      },
+      {
+        "name": "mistral_7b_instruct_v0_3",
+        "model_id": "mistralai/Mistral-7B-Instruct-v0.3",
+        "torch_dtype": "float16",
+        "trust_remote_code": false,
+        "device_map": "auto"
+      }
+    ],
+  
+    "runtime": {
+      "seed": 42,
+      "device": "cuda",
+      "data_dir": "Data",
+      "output_root": "runs/router",
+      "max_prompt_length": 2048
+    },
+  
+    "ensemble": {
+      "strategy": "argmax_confidence",
+      "confidence_margin": 0.0,
+      "tie_breaker": "qwen2_5_3b_instruct"
+    },
+  
+    "decoding": {
+      "do_sample": false,
+      "temperature": 0.0,
+      "top_p": 1.0,
+      "max_new_tokens": 16
+    }
+  }
+  

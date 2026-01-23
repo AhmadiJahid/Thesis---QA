@@ -1,0 +1,12 @@
+{
+  "component": "router",
+  "model_name": "qwen2_5_7b",
+  "model_id": "Qwen/Qwen2.5-7B-Instruct",
+  "prompt_file": "prompt.md",
+  "decoding": {
+    "do_sample": false,
+    "temperature": 0.0,
+    "top_p": 1.0
+  },
+  "notes": "Large model, uses ~14-16GB VRAM in half-precision."
+}

@@ -1,25 +1,25 @@
-# Router Prompt Template
+You are classifying question complexity.
 
-## Task
-You are an assistant that determines how many hops a question requires.
-- 1-hop: one direct fact answers the question.
-- 2-hop: two linked facts are needed.
-- 3-hop: three linked facts are needed.
+Rules:
+- First decide if the question requires shared constraints or multiple related entities.
+- If YES, output 3.
+- Otherwise, decide if an intermediate entity is required.
+  - If YES, output 2.
+  - If NO, output 1.
 
-## Output format
-Question: {{question}}
-Reasoning:
-Output:
+Output ONLY one number: 1, 2, or 3.
+Do not explain your answer.
 
-## Few-shot (optional)
-Example 1:
-Question: <replace_with_example>
-Reasoning: <replace_with_reasoning>
-Output: 1
+Examples:
 
-## Notes
-- Use step-by-step reasoning before the final answer.
-- The final line must be only 1, 2, or 3.
+Q: What genre is Inception?
+A: 1
 
-## Model notes
-- If available, enable thinking mode or explicit reasoning.
+Q: Who directed movies starring Brad Pitt?
+A: 2
+
+Q: Who acted in movies whose directors also directed Inception?
+A: 3
+
+Q: {question}
+A: 

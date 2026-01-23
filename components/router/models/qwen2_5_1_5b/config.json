@@ -1,0 +1,12 @@
+{
+  "component": "router",
+  "model_name": "qwen3_1_7b",
+  "model_id": "Qwen/Qwen2.5-1.5B-Instruct",
+  "prompt_file": "prompt.md",
+  "decoding": {
+    "do_sample": false,
+    "temperature": 0.0,
+    "top_p": 1.0
+  },
+  "notes": "Enable thinking mode if supported."
+}

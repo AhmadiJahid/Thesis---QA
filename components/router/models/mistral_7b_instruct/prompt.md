@@ -1,22 +1,35 @@
-# Router Prompt Template
+Classify the question complexity. Output: 1, 2, or 3
 
-## Task
-You are an assistant that determines how many hops a question requires.
-- 1-hop: one direct fact answers the question.
-- 2-hop: two linked facts are needed.
-- 3-hop: three linked facts are needed.
+Q: What genre is Inception?
+Trace: Inception → genre
+A: 1
 
-## Output format
-Question: {{question}}
-Reasoning:
-Output:
+Q: Who directed Titanic?
+Trace: Titanic → director
+A: 1
 
-## Few-shot (optional)
-Example 1:
-Question: <replace_with_example>
-Reasoning: <replace_with_reasoning>
-Output: 1
+Q: Who directed movies starring Brad Pitt?
+Trace: Brad Pitt → movies → directors
+A: 2
 
-## Notes
-- Use step-by-step reasoning before the final answer.
-- The final line must be only 1, 2, or 3.
+: What genres are films directed by Nolan?
+Trace: Nolan → films → genres
+A: 2
+
+: What release years are movies starring Emma Watson?
+Trace: Emma Watson → movies → release years
+A: 2
+
+
+Q: Which actors starred in movies directed by James Cameron?
+Trace: James Cameron → movies → actors
+A: 2
+
+
+: What languages are films that share directors with The Matrix?
+Trace: The Matrix → director → other films → languages
+A: 3
+
+
+Q: {question}
+Trace:

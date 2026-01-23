@@ -1,0 +1,11 @@
+{
+  "component": "decomposer",
+  "model_name": "qwen2_5_3b",
+  "model_id": "Qwen/Qwen2.5-3B-Instruct",
+  "prompt_file": "prompt.md",
+  "decoding": {
+    "do_sample": false,
+    "temperature": 0.0,
+    "top_p": 1.0
+  }
+}

@@ -228,8 +228,9 @@ def plot_confusion_matrix(runs_data, output_dir):
         # Build confusion matrix
         cm = defaultdict(lambda: defaultdict(int))
         for result in detailed_results:
-            expected = result.get('expected_hop', 0)
-            predicted = result.get('predicted_hop', 0)
+            # Handle different key names (expected vs expected_hop)
+            expected = result.get('expected') or result.get('expected_hop', 0)
+            predicted = result.get('predicted') or result.get('predicted_hop', 0)
             cm[expected][predicted] += 1
         
         # Convert to matrix format (1, 2, 3)
@@ -272,8 +273,9 @@ def plot_error_patterns(runs_data, output_dir):
         detailed_results = run.get('detailed_results', [])
         for result in detailed_results:
             if not result.get('correct', True):
-                expected = result.get('expected_hop', 0)
-                predicted = result.get('predicted_hop', 0)
+                # Handle different key names
+                expected = result.get('expected') or result.get('expected_hop', 0)
+                predicted = result.get('predicted') or result.get('predicted_hop', 0)
                 pattern = f"{expected}-hop → {predicted}-hop"
                 error_patterns[pattern] += 1
     
