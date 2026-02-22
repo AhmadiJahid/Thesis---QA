@@ -1,0 +1,27 @@
+{
+  "config": {
+    "pool_dir": "/cta/users/fyilmaz/Thesis---QA/Pool",
+    "seed": 42,
+    "sample_size": 30
+  },
+  "metrics": {
+    "1_hop": {
+      "input_lines": 96106,
+      "refined_path": "/cta/users/fyilmaz/Thesis---QA/Pool/qa_train_1hop_refined.txt",
+      "pool_path": "/cta/users/fyilmaz/Thesis---QA/Pool/1hop_pool.txt",
+      "sampled_count": 30
+    },
+    "2_hop": {
+      "input_lines": 118980,
+      "refined_path": "/cta/users/fyilmaz/Thesis---QA/Pool/qa_train_2hop_refined.txt",
+      "pool_path": "/cta/users/fyilmaz/Thesis---QA/Pool/2hop_pool.txt",
+      "sampled_count": 30
+    },
+    "3_hop": {
+      "input_lines": 114196,
+      "refined_path": "/cta/users/fyilmaz/Thesis---QA/Pool/qa_train_3hop_refined.txt",
+      "pool_path": "/cta/users/fyilmaz/Thesis---QA/Pool/3hop_pool.txt",
+      "sampled_count": 30
+    }
+  }
+}
