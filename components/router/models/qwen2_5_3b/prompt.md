@@ -40,7 +40,7 @@ A: 3
 Trace: The Social Network → screenwriter → other movies → directors 
 A: 3
 
-: Who directed the movies starred by Tom Hanks? Trace: Tom Hanks → movies → directors A: 2
+Q: Who directed the movies starred by Tom Hanks? Trace: Tom Hanks → movies → directors A: 2
 
 Q: {question}
 Trace:

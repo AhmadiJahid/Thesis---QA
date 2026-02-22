@@ -3,10 +3,16 @@
 Results Visualization and Analysis Script
 
 Analyzes run results from runs/<component>/ directories, generates visualizations,
-and creates a presentable HTML report for professor presentation.
+and creates a presentable HTML report for presentation.
+
+Router runs are saved under:
+  - runs/average_zero_shot/<run_id>/  (when using --prompt_file prompt_zero_shot.md)
+  - runs/average_few_shot/<run_id>/   (default few-shot prompt)
 
 Usage:
-    python scripts/analyze_runs.py [--component router] [--output-dir reports/]
+    python scripts/analyze_runs.py --component average_zero_shot   # plots -> reports/average_zero_shot/
+    python scripts/analyze_runs.py --component average_few_shot   # plots -> reports/average_few_shot/
+    python scripts/analyze_runs.py --component router [--output-dir reports/]
 """
 
 import json
@@ -88,28 +94,50 @@ def load_run_data(runs_dir, component="router", skip_archived=True):
         if not run_dir.is_dir():
             continue
         
-        # Load metrics.json
+        # Load metrics: prefer metrics.json, fall back to metrics_aggregated.json (multi-run average)
         metrics_file = run_dir / "metrics.json"
+        aggregated_file = run_dir / "metrics_aggregated.json"
         config_file = run_dir / "config.json"
         detailed_file = run_dir / "detailed_results.json"
-        
-        if not metrics_file.exists():
-            print(f"Warning: {metrics_file} not found, skipping {run_dir.name}")
-            continue
-        
-        try:
+        detailed_run0_file = run_dir / "detailed_results_run_0.json"
+
+        if metrics_file.exists():
             with open(metrics_file, 'r') as f:
                 metrics = json.load(f)
-            
+        elif aggregated_file.exists():
+            with open(aggregated_file, 'r') as f:
+                raw = json.load(f)
+            # Normalize to same shape as metrics.json for plotting (use _mean as primary value)
+            metrics = {
+                "overall_accuracy": raw.get("overall_accuracy_mean", raw.get("overall_accuracy", 0)),
+                "overall_accuracy_std": raw.get("overall_accuracy_std", 0),
+                "hop_1_accuracy": raw.get("hop_1_accuracy_mean", raw.get("hop_1_accuracy", 0)),
+                "hop_1_accuracy_std": raw.get("hop_1_accuracy_std", 0),
+                "hop_2_accuracy": raw.get("hop_2_accuracy_mean", raw.get("hop_2_accuracy", 0)),
+                "hop_2_accuracy_std": raw.get("hop_2_accuracy_std", 0),
+                "hop_3_accuracy": raw.get("hop_3_accuracy_mean", raw.get("hop_3_accuracy", 0)),
+                "hop_3_accuracy_std": raw.get("hop_3_accuracy_std", 0),
+                "total_questions": raw.get("total_questions"),
+                "correct_predictions": raw.get("correct_predictions"),
+                "num_runs": raw.get("num_runs"),
+            }
+            metrics = {k: v for k, v in metrics.items() if v is not None}
+        else:
+            print(f"Warning: neither metrics.json nor metrics_aggregated.json found, skipping {run_dir.name}")
+            continue
+
+        try:
             config = {}
             if config_file.exists():
                 with open(config_file, 'r') as f:
                     config = json.load(f)
-            
+
             detailed_results = []
-            if detailed_file.exists():
-                with open(detailed_file, 'r') as f:
-                    detailed_results = json.load(f)
+            for fpath in (detailed_file, detailed_run0_file):
+                if fpath.exists():
+                    with open(fpath, 'r') as f:
+                        detailed_results = json.load(f)
+                    break
             
             model_id = config.get('model_id', 'N/A')
             model_short = get_model_short_name(model_id)
@@ -465,18 +493,21 @@ def main():
     parser.add_argument('--runs-dir', type=str, default='runs',
                        help='Path to runs directory (default: runs)')
     parser.add_argument('--component', type=str, default='router',
-                       help='Component to analyze (default: router)')
-    parser.add_argument('--output-dir', type=str, default='reports',
-                       help='Output directory for plots and report (default: reports)')
+                       help='Folder under runs/ to analyze: router, average_zero_shot, average_few_shot, etc. (default: router)')
+    parser.add_argument('--output-dir', type=str, default=None,
+                       help='Output directory for plots and report (default: reports/<component>)')
     parser.add_argument('--skip-archived', action='store_true', default=True,
                        help='Skip folders named "archived" (default: True)')
     
     args = parser.parse_args()
-    
-    # Create output directory
-    output_dir = Path(args.output_dir)
+
+    # Output dir: default reports/<component> so average_zero_shot and average_few_shot don't overwrite
+    if args.output_dir is None:
+        output_dir = Path("reports") / args.component
+    else:
+        output_dir = Path(args.output_dir)
     output_dir.mkdir(parents=True, exist_ok=True)
-    
+
     print(f"Loading run data from {args.runs_dir}/{args.component}/...")
     runs_data = load_run_data(args.runs_dir, args.component, args.skip_archived)
     

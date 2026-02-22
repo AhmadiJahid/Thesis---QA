@@ -36,11 +36,11 @@ A: 3
 Trace: Inception → director → other movies → actors
 A: 3
 
-: Who directed the movies written by the screenwriter of The Social Network? 
-Trace: The Social Network → screenwriter → other movies → directors 
+: Who directed the movies written by the screenwriter of The Social Network?
+Trace: The Social Network → screenwriter → other movies → directors
 A: 3
 
-: Who directed the movies starred by Tom Hanks? Trace: Tom Hanks → movies → directors A: 2
+Q: Who directed the movies starred by Tom Hanks? Trace: Tom Hanks → movies → directors A: 2
 
 Q: {question}
 Trace:

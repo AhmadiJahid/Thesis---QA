@@ -1,0 +1,149 @@
+
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Router Component Analysis Report</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 20px;
+            line-height: 1.6;
+        }
+        h1 {
+            color: #2c3e50;
+            border-bottom: 3px solid #3498db;
+            padding-bottom: 10px;
+        }
+        h2 {
+            color: #34495e;
+            margin-top: 30px;
+        }
+        img {
+            max-width: 100%;
+            height: auto;
+            margin: 20px 0;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+        }
+        table {
+            font-size: 14px;
+        }
+        th {
+            background-color: #3498db;
+            color: white;
+            padding: 10px;
+            text-align: left;
+        }
+        td {
+            padding: 8px;
+            border: 1px solid #ddd;
+        }
+        tr:nth-child(even) {
+            background-color: #f2f2f2;
+        }
+        .section {
+            margin: 40px 0;
+            padding: 20px;
+            background-color: #f9f9f9;
+            border-radius: 5px;
+        }
+    </style>
+</head>
+<body>
+    <h1>Router Component Performance Analysis Report</h1>
+    <p><strong>Generated:</strong> 2026-02-13 02:56:59</p>
+    <p><strong>Total Runs Analyzed:</strong> 9</p>
+    
+    <div class="section">
+        <h2>Summary Statistics</h2>
+        <table border='1' style='border-collapse: collapse; width: 100%; margin: 20px 0;'>
+<tr><th>Run ID</th><th>Overall Accuracy</th><th>1-hop</th><th>2-hop</th><th>3-hop</th><th>Model</th><th>Total Questions</th></tr>
+<tr><td>20260123_002620</td><td>81.33%</td><td>100.00%</td><td>70.00%</td><td>74.00%</td><td>Qwen/Qwen2.5-1.5B-Instruct</td><td>300</td></tr>
+<tr><td>20260123_011752</td><td>69.00%</td><td>96.00%</td><td>31.00%</td><td>80.00%</td><td>Qwen/Qwen2.5-0.5B-Instruct</td><td>300</td></tr>
+<tr><td>20260123_014642</td><td>87.00%</td><td>100.00%</td><td>76.00%</td><td>85.00%</td><td>Qwen/Qwen2.5-7B-Instruct</td><td>300</td></tr>
+<tr><td>20260123_024958</td><td>75.00%</td><td>74.00%</td><td>54.00%</td><td>97.00%</td><td>Qwen/Qwen3-8B</td><td>300</td></tr>
+<tr><td>20260123_042657</td><td>76.67%</td><td>97.00%</td><td>34.00%</td><td>99.00%</td><td>mistralai/Mistral-7B-Instruct-v0.3</td><td>300</td></tr>
+<tr><td>20260123_044730</td><td>71.33%</td><td>92.00%</td><td>36.00%</td><td>86.00%</td><td>microsoft/Phi-3.5-mini-instruct</td><td>300</td></tr>
+<tr><td>20260123_050157</td><td>70.00%</td><td>100.00%</td><td>70.00%</td><td>40.00%</td><td>microsoft/Phi-3-mini-4k-instruct</td><td>300</td></tr>
+<tr><td>20260123_051315</td><td>68.33%</td><td>99.00%</td><td>89.00%</td><td>17.00%</td><td>microsoft/Phi-4-mini-instruct</td><td>300</td></tr>
+<tr><td>20260123_054856</td><td>90.33%</td><td>94.00%</td><td>95.00%</td><td>82.00%</td><td>Qwen/Qwen2.5-3B-Instruct</td><td>300</td></tr>
+</table>
+    </div>
+    
+    <div class="section">
+        <h2>Overall Accuracy Comparison</h2>
+        <img src='overall_accuracy.png' alt='Overall Accuracy Comparison'>
+    </div>
+    
+    <div class="section">
+        <h2>Per-Hop Accuracy Trends</h2>
+        <img src='per_hop_accuracy.png' alt='Per-Hop Accuracy Comparison'>
+    </div>
+    
+    <div class="section">
+        <h2>Error Pattern Summary</h2>
+        <img src='error_patterns.png' alt='Error Patterns'>
+    </div>
+    
+    <div class="section">
+        <h2>Confusion Matrices</h2>
+        
+        <div style='margin: 30px 0;'>
+            <h3>Confusion Matrix - 20260123_002620 (Qwen2.5-1.5B)</h3>
+            <img src='confusion_matrix_20260123_002620.png' alt='Confusion Matrix 20260123_002620' style='max-width: 100%;'>
+        </div>
+        
+        <div style='margin: 30px 0;'>
+            <h3>Confusion Matrix - 20260123_011752 (Qwen2.5-0.5B)</h3>
+            <img src='confusion_matrix_20260123_011752.png' alt='Confusion Matrix 20260123_011752' style='max-width: 100%;'>
+        </div>
+        
+        <div style='margin: 30px 0;'>
+            <h3>Confusion Matrix - 20260123_014642 (Qwen2.5-7B)</h3>
+            <img src='confusion_matrix_20260123_014642.png' alt='Confusion Matrix 20260123_014642' style='max-width: 100%;'>
+        </div>
+        
+        <div style='margin: 30px 0;'>
+            <h3>Confusion Matrix - 20260123_024958 (Qwen3-8B)</h3>
+            <img src='confusion_matrix_20260123_024958.png' alt='Confusion Matrix 20260123_024958' style='max-width: 100%;'>
+        </div>
+        
+        <div style='margin: 30px 0;'>
+            <h3>Confusion Matrix - 20260123_042657 (Mistral-7B-Instruct-v0.3)</h3>
+            <img src='confusion_matrix_20260123_042657.png' alt='Confusion Matrix 20260123_042657' style='max-width: 100%;'>
+        </div>
+        
+        <div style='margin: 30px 0;'>
+            <h3>Confusion Matrix - 20260123_044730 (Phi-3.5-mini-instruct)</h3>
+            <img src='confusion_matrix_20260123_044730.png' alt='Confusion Matrix 20260123_044730' style='max-width: 100%;'>
+        </div>
+        
+        <div style='margin: 30px 0;'>
+            <h3>Confusion Matrix - 20260123_050157 (Phi-3-mini-4k-instruct)</h3>
+            <img src='confusion_matrix_20260123_050157.png' alt='Confusion Matrix 20260123_050157' style='max-width: 100%;'>
+        </div>
+        
+        <div style='margin: 30px 0;'>
+            <h3>Confusion Matrix - 20260123_051315 (Phi-4-mini-instruct)</h3>
+            <img src='confusion_matrix_20260123_051315.png' alt='Confusion Matrix 20260123_051315' style='max-width: 100%;'>
+        </div>
+        
+        <div style='margin: 30px 0;'>
+            <h3>Confusion Matrix - 20260123_054856 (Qwen2.5-3B)</h3>
+            <img src='confusion_matrix_20260123_054856.png' alt='Confusion Matrix 20260123_054856' style='max-width: 100%;'>
+        </div>
+        
+    </div>
+    
+    <div class="section">
+        <h2>Notes</h2>
+        <ul>
+            <li>Runs in "archived" folders are excluded from analysis</li>
+            <li>All accuracy values are percentages</li>
+            <li>Confusion matrices show actual vs predicted hop counts</li>
+        </ul>
+    </div>
+</body>
+</html>

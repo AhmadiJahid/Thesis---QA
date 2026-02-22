@@ -2,11 +2,11 @@ import argparse
 import json
 import random
 import re
+import statistics
 from pathlib import Path
 from datetime import datetime
 import torch
 from transformers import AutoTokenizer, AutoModelForCausalLM
-from collections import Counter
 
 def set_seed(seed):
     random.seed(seed)
@@ -85,6 +85,29 @@ def classify_hop_count(question: str, model, tokenizer, device, prompt_template,
         print(f"Error parsing response for '{question[:50]}...': {e}. Defaulting to 2.")
         return 2
 
+def compute_metrics(predictions, all_expected, run_seed, config, run_idx=None):
+    """Compute metrics for one run. Returns dict suitable for metrics.json."""
+    correct = sum(1 for p, e in zip(predictions, all_expected) if p == e)
+    accuracy = correct / len(predictions) if predictions else 0.0
+    per_hop_acc = {}
+    for h in [1, 2, 3]:
+        total = all_expected.count(h)
+        match = sum(1 for p, e in zip(predictions, all_expected) if e == h and p == e)
+        per_hop_acc[f"hop_{h}_accuracy"] = match / total if total > 0 else 0.0
+        per_hop_acc[f"hop_{h}_total"] = total
+    metrics = {
+        "overall_accuracy": accuracy,
+        "total_questions": len(predictions),
+        "correct_predictions": correct,
+        **per_hop_acc,
+        "seed": run_seed,
+        "model": config["model_id"],
+        "run_id": config["run_id"],
+    }
+    if run_idx is not None:
+        metrics["run_index"] = run_idx
+    return metrics
+
 def main():
     parser = argparse.ArgumentParser(description="Run Router Component (Hop Count Classification)")
     parser.add_argument("--model_id", type=str, help="Hugging Face model ID")
@@ -92,6 +115,8 @@ def main():
     parser.add_argument("--data_dir", type=str, default="Data", help="Directory containing MetaQA files")
     parser.add_argument("--output_root", type=str, default="runs/router", help="Root directory for runs")
     parser.add_argument("--sample_size", type=int, default=None, help="Number of questions to sample per hop")
+    parser.add_argument("--prompt_file", type=str, default=None, help="Prompt file (e.g. prompt_zero_shot.md); overrides config for zero-shot")
+    parser.add_argument("--num_runs", type=int, default=1, help="Number of runs to average (seeds seed, seed+1, ...)")
     args = parser.parse_args()
 
     # 1. Load Local Config
@@ -99,6 +124,8 @@ def main():
     config_path = script_dir / "config.json"
     with open(config_path, "r") as f:
         base_config = json.load(f)
+
+    prompt_file = args.prompt_file or base_config.get("prompt_file", "prompt.md")
 
     # Merge CLI args into config
     config = {
@@ -113,14 +140,21 @@ def main():
         "temperature": base_config.get("decoding", {}).get("temperature", 0.0),
         "top_p": base_config.get("decoding", {}).get("top_p", 1.0),
         "do_sample": base_config.get("decoding", {}).get("do_sample", False),
+        "prompt_file": prompt_file,
+        "num_runs": args.num_runs,
     }
+    if config["output_root"] == "runs/router":
+        config["output_root"] = "runs/average_zero_shot" if "zero_shot" in prompt_file else "runs/average_few_shot"
 
-    set_seed(config["seed"])
-    print(f"Starting Run: {config['run_id']}")
+    print(f"Starting Run: {config['run_id']} (num_runs={config['num_runs']})")
     print(f"Config: {json.dumps(config, indent=2)}")
 
-    # 2. Load Prompt Template
-    prompt_path = script_dir / base_config.get("prompt_file", "prompt.md")
+    # 2. Load Prompt Template (model dir or shared models dir)
+    prompt_path = script_dir / prompt_file
+    if not prompt_path.exists():
+        prompt_path = script_dir.parent / prompt_file
+    if not prompt_path.exists():
+        raise FileNotFoundError(f"Prompt file not found: {prompt_file} in {script_dir} or {script_dir.parent}")
     with open(prompt_path, "r") as f:
         prompt_template = f.read()
 
@@ -162,65 +196,88 @@ def main():
 
     model.eval()
 
-    # 5. Inference
-    predictions = []
-    print("Running inference...")
-    for i, q in enumerate(all_questions):
-        if (i + 1) % 10 == 0:
-            print(f"Processed {i + 1}/{len(all_questions)}...")
-        pred = classify_hop_count(q, model, tokenizer, config["device"], prompt_template, config)
-        predictions.append(pred)
+    num_runs = config["num_runs"]
+    all_runs_metrics = []
+    all_runs_predictions = []
 
-    # 6. Evaluation
-    correct = sum(1 for p, e in zip(predictions, all_expected) if p == e)
-    accuracy = correct / len(predictions)
-    
-    confusion = Counter()
-    for p, e in zip(predictions, all_expected):
-        confusion[(e, p)] += 1
+    for run_idx in range(num_runs):
+        run_seed = config["seed"] + run_idx
+        set_seed(run_seed)
+        print(f"\n--- Run {run_idx + 1}/{num_runs} (seed={run_seed}) ---")
+        predictions = []
+        for i, q in enumerate(all_questions):
+            if (i + 1) % 10 == 0:
+                print(f"Processed {i + 1}/{len(all_questions)}...")
+            pred = classify_hop_count(q, model, tokenizer, config["device"], prompt_template, config)
+            predictions.append(pred)
+        all_runs_predictions.append(predictions)
+        run_metrics = compute_metrics(predictions, all_expected, run_seed, config, run_idx=run_idx)
+        all_runs_metrics.append(run_metrics)
+        print(f"Run {run_idx + 1} accuracy: {run_metrics['overall_accuracy']:.4f}")
 
-    per_hop_acc = {}
-    for h in [1, 2, 3]:
-        total = all_expected.count(h)
-        match = sum(1 for p, e in zip(predictions, all_expected) if e == h and p == e)
-        per_hop_acc[f"hop_{h}_accuracy"] = match / total if total > 0 else 0.0
-        per_hop_acc[f"hop_{h}_total"] = total
-
-    metrics = {
-        "overall_accuracy": accuracy,
-        "total_questions": len(predictions),
-        "correct_predictions": correct,
-        **per_hop_acc,
-        "seed": config["seed"],
-        "model": config["model_id"],
-        "run_id": config["run_id"],
-    }
-
-    print("\n" + "="*30)
-    print(f"Accuracy: {accuracy:.4f}")
-    for h in [1, 2, 3]:
-        print(f"{h}-hop: {per_hop_acc[f'hop_{h}_accuracy']:.4f}")
-    print("="*30)
+    # 6. Aggregate (when num_runs > 1)
+    if num_runs == 1:
+        metrics = all_runs_metrics[0]
+        predictions = all_runs_predictions[0]
+        print("\n" + "="*30)
+        print(f"Accuracy: {metrics['overall_accuracy']:.4f}")
+        for h in [1, 2, 3]:
+            print(f"{h}-hop: {metrics[f'hop_{h}_accuracy']:.4f}")
+        print("="*30)
+    else:
+        agg = {
+            "num_runs": num_runs,
+            "overall_accuracy_mean": statistics.mean(m["overall_accuracy"] for m in all_runs_metrics),
+            "overall_accuracy_std": statistics.stdev(m["overall_accuracy"] for m in all_runs_metrics) if num_runs > 1 else 0.0,
+            "model": config["model_id"],
+            "run_id": config["run_id"],
+        }
+        for h in [1, 2, 3]:
+            accs = [m[f"hop_{h}_accuracy"] for m in all_runs_metrics]
+            agg[f"hop_{h}_accuracy_mean"] = statistics.mean(accs)
+            agg[f"hop_{h}_accuracy_std"] = statistics.stdev(accs) if num_runs > 1 else 0.0
+        metrics = agg
+        print("\n" + "="*30)
+        print(f"Accuracy (mean ± std): {metrics['overall_accuracy_mean']:.4f} ± {metrics['overall_accuracy_std']:.4f}")
+        for h in [1, 2, 3]:
+            print(f"{h}-hop: {metrics[f'hop_{h}_accuracy_mean']:.4f} ± {metrics[f'hop_{h}_accuracy_std']:.4f}")
+        print("="*30)
 
     # 7. Save Artifacts
     output_dir = workspace_root / config["output_root"] / config["run_id"]
     output_dir.mkdir(parents=True, exist_ok=True)
 
-    with open(output_dir / "metrics.json", "w") as f:
-        json.dump(metrics, f, indent=2)
     with open(output_dir / "config.json", "w") as f:
         json.dump(config, f, indent=2)
 
-    detailed_results = [
-        {"question": q, "expected": e, "predicted": p, "correct": p == e}
-        for q, e, p in zip(all_questions, all_expected, predictions)
-    ]
-    with open(output_dir / "detailed_results.json", "w") as f:
-        json.dump(detailed_results, f, indent=2, ensure_ascii=False)
-
-    notes = f"""Router Component Run - {config['run_id']}
+    if num_runs == 1:
+        with open(output_dir / "metrics.json", "w") as f:
+            json.dump(metrics, f, indent=2)
+        detailed_results = [
+            {"question": q, "expected": e, "predicted": p, "correct": p == e}
+            for q, e, p in zip(all_questions, all_expected, predictions)
+        ]
+        with open(output_dir / "detailed_results.json", "w") as f:
+            json.dump(detailed_results, f, indent=2, ensure_ascii=False)
+        notes = f"""Router Component Run - {config['run_id']}
 Model: {config['model_id']}
-Overall Accuracy: {accuracy:.4f}
+Overall Accuracy: {metrics['overall_accuracy']:.4f}
+"""
+    else:
+        for run_idx, run_metrics in enumerate(all_runs_metrics):
+            with open(output_dir / f"metrics_run_{run_idx}.json", "w") as f:
+                json.dump(run_metrics, f, indent=2)
+        with open(output_dir / "metrics_aggregated.json", "w") as f:
+            json.dump(metrics, f, indent=2)
+        detailed_results = [
+            {"question": q, "expected": e, "predicted": p, "correct": p == e}
+            for q, e, p in zip(all_questions, all_expected, all_runs_predictions[0])
+        ]
+        with open(output_dir / "detailed_results_run_0.json", "w") as f:
+            json.dump(detailed_results, f, indent=2, ensure_ascii=False)
+        notes = f"""Router Component Run - {config['run_id']} ({num_runs} runs averaged)
+Model: {config['model_id']}
+Overall Accuracy (mean ± std): {metrics['overall_accuracy_mean']:.4f} ± {metrics['overall_accuracy_std']:.4f}
 """
     with open(output_dir / "notes.md", "w") as f:
         f.write(notes)

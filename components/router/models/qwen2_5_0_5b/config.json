@@ -1,0 +1,12 @@
+{
+  "component": "router",
+  "model_name": "qwen2_5_0_5b",
+  "model_id": "Qwen/Qwen2.5-0.5B-Instruct",
+  "prompt_file": "prompt.md",
+  "decoding": {
+    "do_sample": false,
+    "temperature": 0,
+    "top_p": 1
+  },
+  "notes": "Smallest Qwen2.5 instruct model for router."
+}
