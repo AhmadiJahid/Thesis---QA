@@ -22,12 +22,43 @@ def load_questions(file_path: Path):
         questions = [line.strip() for line in f if line.strip()]
     return questions
 
-def build_prompt(template: str, question: str, hop_count: int = None) -> str:
-    h = hop_count if hop_count is not None else "Unknown"
-    return template.format(question=question, hop_count=h)
+def load_few_shot_decompositions(workspace_root: Path) -> dict:
+    """Load few-shot examples from Pool/few_shot_decompositions.json."""
+    path = workspace_root / "Pool" / "few_shot_decompositions.json"
+    if not path.exists():
+        return {}
+    with open(path, "r", encoding="utf-8") as f:
+        return json.load(f)
 
-def decompose_question(question: str, hop_count, model, tokenizer, device, prompt_template, config):
-    prompt = build_prompt(prompt_template, question, hop_count)
+
+def format_few_shot_examples(examples: list, hop_count: int) -> str:
+    """Format 6 (question, decomposition) pairs for the prompt."""
+    blocks = []
+    for ex in examples:
+        blocks.append(
+            f"Hop count: {hop_count}\n"
+            f"Question: {ex['question']}\n"
+            f"Decomposition:\n{ex['decomposition']}"
+        )
+    return "\n\n".join(blocks)
+
+
+def sample_few_shot(few_shot_data: dict, hop_count: int, n: int = 6) -> list:
+    """Sample n random examples for the given hop. Uses unseeded RNG so examples vary each run."""
+    key = f"{hop_count}hop"
+    pool = few_shot_data.get(key, [])
+    if len(pool) <= n:
+        return pool
+    rng = random.Random()  # unseeded: varies per run
+    return rng.sample(pool, n)
+
+
+def build_prompt(template: str, question: str, hop_count: int = None, few_shot_examples: str = "") -> str:
+    h = hop_count if hop_count is not None else "Unknown"
+    return template.format(question=question, hop_count=h, few_shot_examples=few_shot_examples)
+
+def decompose_question(question: str, hop_count, model, tokenizer, device, prompt_template, config, few_shot_examples: str = ""):
+    prompt = build_prompt(prompt_template, question, hop_count, few_shot_examples)
 
     if tokenizer.pad_token is None:
         tokenizer.pad_token = tokenizer.eos_token
@@ -92,9 +123,10 @@ def main():
     with open(prompt_path, "r") as f:
         prompt_template = f.read()
 
-    # 3. Load Data
+    # 3. Load Data & Few-Shot Pool
     workspace_root = Path(__file__).resolve().parents[4]
     data_path = workspace_root / config["data_dir"]
+    few_shot_data = load_few_shot_decompositions(workspace_root)
     
     hops = [1, 2, 3]
     all_questions = []
@@ -133,10 +165,18 @@ def main():
     for i, (q, hop) in enumerate(zip(all_questions, all_expected_hops)):
         if (i + 1) % 10 == 0:
             print(f"Processed {i + 1}/{len(all_questions)}...")
-        
-        hop_input = hop if config["guided"] else None
-        decomposition = decompose_question(q, hop_input, model, tokenizer, config["device"], prompt_template, config)
-        
+
+        if hop == 1:
+            decomposition = q
+        else:
+            hop_input = hop if config["guided"] else None
+            sampled = sample_few_shot(few_shot_data, hop, n=6)
+            few_shot_str = format_few_shot_examples(sampled, hop)
+            decomposition = decompose_question(
+                q, hop_input, model, tokenizer, config["device"],
+                prompt_template, config, few_shot_examples=few_shot_str,
+            )
+
         results.append({
             "question": q,
             "hop_count": hop,

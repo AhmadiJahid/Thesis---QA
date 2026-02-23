@@ -447,13 +447,19 @@ def print_metrics(m: DecompositionMetrics) -> None:
 
 
 if __name__ == "__main__":
+    import argparse
+    parser = argparse.ArgumentParser(description="Evaluate decompositions on MetaQA KG")
+    parser.add_argument("results_path", type=Path, nargs="?", default=Path("runs/decomposer/20260123_072902/results.json"),
+                        help="Path to decomposer results.json")
+    parser.add_argument("--kb", type=Path, default=Path("Data/kb.txt"), help="Path to KG kb.txt")
+    args = parser.parse_args()
+
     # 1) Build KG
-    kb_path = "Data/kb.txt"
-    print(f"Loading KG from {kb_path}...")
-    kg = build_metaqa_kg(kb_path)
+    print(f"Loading KG from {args.kb}...")
+    kg = build_metaqa_kg(str(args.kb))
 
     # 2) Path to your results.json
-    results_path = "runs/decomposer/20260123_072902/results.json"
+    results_path = args.results_path
     
     # Automatically set output directory based on results_path
     results_dir = Path(results_path).parent
