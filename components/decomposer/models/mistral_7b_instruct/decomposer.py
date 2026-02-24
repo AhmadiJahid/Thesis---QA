@@ -57,8 +57,9 @@ def build_prompt(template: str, question: str, hop_count: int = None, few_shot_e
     h = hop_count if hop_count is not None else "Unknown"
     return template.format(question=question, hop_count=h, few_shot_examples=few_shot_examples)
 
-def decompose_question(question: str, hop_count, model, tokenizer, device, prompt_template, config, few_shot_examples: str = ""):
-    prompt = build_prompt(prompt_template, question, hop_count, few_shot_examples)
+def decompose_question(question: str, hop_count, model, tokenizer, device, prompt_template, config, few_shot_examples: str = "", prompt: str = None):
+    if prompt is None:
+        prompt = build_prompt(prompt_template, question, hop_count, few_shot_examples)
 
     if tokenizer.pad_token is None:
         tokenizer.pad_token = tokenizer.eos_token
@@ -160,6 +161,11 @@ def main():
     model.eval()
 
     # 5. Inference
+    output_dir = workspace_root / config["output_root"] / config["run_id"]
+    output_dir.mkdir(parents=True, exist_ok=True)
+    prompts_dir = output_dir / "prompts_log"
+    prompts_dir.mkdir(exist_ok=True)
+
     results = []
     print("Running inference...")
     for i, (q, hop) in enumerate(zip(all_questions, all_expected_hops)):
@@ -169,13 +175,20 @@ def main():
         if hop == 1:
             decomposition = q
         else:
-            hop_input = hop if config["guided"] else None
+            hop_input = hop  # Always pass hop count for Task (model needs it for step count)
             sampled = sample_few_shot(few_shot_data, hop, n=6)
             few_shot_str = format_few_shot_examples(sampled, hop)
+            prompt = build_prompt(prompt_template, q, hop_input, few_shot_str)
             decomposition = decompose_question(
                 q, hop_input, model, tokenizer, config["device"],
                 prompt_template, config, few_shot_examples=few_shot_str,
+                prompt=prompt,
             )
+            if (i + 1) % 10 == 0:
+                log_path = prompts_dir / f"prompt_idx{i+1:04d}_hop{hop}.txt"
+                log_content = prompt + "\n" + decomposition
+                log_path.write_text(log_content, encoding="utf-8")
+                print(f"  Logged prompt+response to {log_path.name}")
 
         results.append({
             "question": q,
@@ -184,9 +197,6 @@ def main():
         })
 
     # 6. Save Artifacts
-    output_dir = workspace_root / config["output_root"] / config["run_id"]
-    output_dir.mkdir(parents=True, exist_ok=True)
-
     with open(output_dir / "results.json", "w", encoding="utf-8") as f:
         json.dump(results, f, indent=2, ensure_ascii=False)
     
