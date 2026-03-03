@@ -20,6 +20,16 @@ def _pool_hash(questions: list[str]) -> str:
     return hashlib.sha256(blob.encode()).hexdigest()[:12]
 
 
+def _model_slug(model_id: str) -> str:
+    """Short slug for cache paths (e.g. minilm, e5-small)."""
+    return model_id.split("/")[-1].replace(".", "_")[:20]
+
+
+def _needs_e5_prefix(model_id: str) -> bool:
+    """E5 models expect 'query:' and 'passage:' prefixes."""
+    return "e5" in model_id.lower()
+
+
 def load_pool(path: Path) -> dict[str, list[dict[str, Any]]]:
     """Load few_shot_decompositions.json."""
     data = json.loads(path.read_text(encoding="utf-8"))
@@ -48,27 +58,30 @@ def get_pool_embeddings(
     result: dict[str, tuple[list[dict], np.ndarray]] = {}
     model = SentenceTransformer(model_id)
 
+    model_slug = _model_slug(model_id)
+    use_prefix = _needs_e5_prefix(model_id)
+
     for hop_key, items in pool.items():
         questions = [it["question"] for it in items]
         content_hash = _pool_hash(questions)
-        cache_file = cache_dir / f"embeddings_{hop_key}_{content_hash}.npz"
+        cache_file = cache_dir / f"embeddings_{model_slug}_{hop_key}_{content_hash}.npz"
 
         if cache_file.exists():
             loaded = np.load(cache_file, allow_pickle=True)
             emb = loaded["embeddings"]
-            # items stored as list of dicts
             cached_items = loaded["items"].tolist()
             result[hop_key] = (cached_items, emb)
             continue
 
-        emb = model.encode(questions, normalize_embeddings=True)
+        to_encode = [f"passage: {q}" for q in questions] if use_prefix else questions
+        emb = model.encode(to_encode, normalize_embeddings=True)
         np.savez_compressed(
             cache_file,
             embeddings=emb,
             items=np.array(items, dtype=object),
         )
-        # Remove stale cache files for this hop
-        for f in cache_dir.glob(f"embeddings_{hop_key}_*.npz"):
+        # Remove stale cache files for this hop+model
+        for f in cache_dir.glob(f"embeddings_{model_slug}_{hop_key}_*.npz"):
             if f != cache_file:
                 f.unlink(missing_ok=True)
         result[hop_key] = (items, emb)
@@ -102,7 +115,9 @@ def top_k_similar(
     items, emb = pool_embeddings[hop_key]
     if not items:
         return []
-    q_emb = model.encode([query], normalize_embeddings=True)[0]
+    use_prefix = _needs_e5_prefix(model_id)
+    to_encode = [f"query: {query}"] if use_prefix else [query]
+    q_emb = model.encode(to_encode, normalize_embeddings=True)[0]
     scores = np.dot(emb, q_emb)  # cosine sim (embeddings normalized)
 
     idx_scores = list(enumerate(scores))
