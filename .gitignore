@@ -14,6 +14,9 @@ data/
 .ipynb_checkpoints/
 **/.ipynb_checkpoints/
 
+# Pool embedding cache (regenerated when pool changes)
+Pool/embeddings_cache/
+
 # Python caches
 __pycache__/
 **/__pycache__/
