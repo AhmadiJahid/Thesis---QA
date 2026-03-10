@@ -29,6 +29,27 @@ def build_prompt(template: str, question: str) -> str:
         return template.replace("{{question}}", question)
     return template.format(question=question)
 
+
+def _parse_hop_response(response: str, question: str) -> int:
+    """Parse hop count (1, 2, or 3) from model response. Defaults to 2 on failure."""
+    clean_response = re.sub(r"<think>.*?</think>", "", response, flags=re.DOTALL).strip()
+    if match := re.search(r"(?:Output|A):\s*([123])", clean_response, re.IGNORECASE):
+        return int(match.group(1))
+    if match := re.search(r"[123]", clean_response):
+        return int(match.group())
+    lower_resp = clean_response.lower()
+    if "1-hop" in lower_resp or "one hop" in lower_resp:
+        return 1
+    if "2-hop" in lower_resp or "two hop" in lower_resp:
+        return 2
+    if "3-hop" in lower_resp or "three hop" in lower_resp:
+        return 3
+    if numbers := re.findall(r"[123]", clean_response):
+        return int(numbers[0])
+    print(f"Warning: No valid hop count in response for: '{question[:50]}...'. Defaulting to 2.")
+    return 2
+
+
 def classify_hop_count(question: str, model, tokenizer, device, prompt_template, config) -> int:
     prompt = build_prompt(prompt_template, question)
 
@@ -50,49 +71,20 @@ def classify_hop_count(question: str, model, tokenizer, device, prompt_template,
     response = tokenizer.decode(
         outputs[0][inputs["input_ids"].shape[1]:], skip_special_tokens=True
     ).strip()
-
     try:
-        # Clean response (remove reasoning/thought tags if present)
-        clean_response = re.sub(r"<think>.*?</think>", "", response, flags=re.DOTALL).strip()
-        
-        # Take the first line or look for the first digit
-        clean_response = clean_response.strip()
-        
-        # Look for "A: X" pattern first since it matches the prompt
-        match = re.search(r"A:\s*([123])", clean_response)
-        if match:
-            return int(match.group(1))
-
-        # Fallback to looking for the first digit in the response
-        match = re.search(r"[123]", clean_response)
-        if match:
-            return int(match.group())
-
-        # Fallback keyword matching
-        lower_resp = clean_response.lower()
-        if "1-hop" in lower_resp or "one hop" in lower_resp: return 1
-        if "2-hop" in lower_resp or "two hop" in lower_resp: return 2
-        if "3-hop" in lower_resp or "three hop" in lower_resp: return 3
-
-        # Last resort: any digit in the whole response
-        numbers = re.findall(r"[123]", clean_response)
-        if numbers:
-            return int(numbers[0])
-
-        print(f"Warning: No valid hop count in response for: '{question[:50]}...'. Defaulting to 2.")
-        return 2
+        return _parse_hop_response(response, question)
     except Exception as e:
         print(f"Error parsing response for '{question[:50]}...': {e}. Defaulting to 2.")
         return 2
 
 def compute_metrics(predictions, all_expected, run_seed, config, run_idx=None):
     """Compute metrics for one run. Returns dict suitable for metrics.json."""
-    correct = sum(1 for p, e in zip(predictions, all_expected) if p == e)
+    correct = sum(p == e for p, e in zip(predictions, all_expected))
     accuracy = correct / len(predictions) if predictions else 0.0
     per_hop_acc = {}
     for h in [1, 2, 3]:
         total = all_expected.count(h)
-        match = sum(1 for p, e in zip(predictions, all_expected) if e == h and p == e)
+        match = sum(e == h and p == e for p, e in zip(predictions, all_expected))
         per_hop_acc[f"hop_{h}_accuracy"] = match / total if total > 0 else 0.0
         per_hop_acc[f"hop_{h}_total"] = total
     metrics = {
@@ -227,11 +219,6 @@ def main():
     if num_runs == 1:
         metrics = all_runs_metrics[0]
         predictions = all_runs_predictions[0]
-        print("\n" + "="*30)
-        print(f"Accuracy: {metrics['overall_accuracy']:.4f}")
-        for h in [1, 2, 3]:
-            print(f"{h}-hop: {metrics[f'hop_{h}_accuracy']:.4f}")
-        print("="*30)
     else:
         agg = {
             "num_runs": num_runs,
@@ -245,11 +232,17 @@ def main():
             agg[f"hop_{h}_accuracy_mean"] = statistics.mean(accs)
             agg[f"hop_{h}_accuracy_std"] = statistics.stdev(accs) if num_runs > 1 else 0.0
         metrics = agg
-        print("\n" + "="*30)
+
+    print("\n" + "=" * 30)
+    if num_runs == 1:
+        print(f"Accuracy: {metrics['overall_accuracy']:.4f}")
+        for h in [1, 2, 3]:
+            print(f"{h}-hop: {metrics[f'hop_{h}_accuracy']:.4f}")
+    else:
         print(f"Accuracy (mean ± std): {metrics['overall_accuracy_mean']:.4f} ± {metrics['overall_accuracy_std']:.4f}")
         for h in [1, 2, 3]:
             print(f"{h}-hop: {metrics[f'hop_{h}_accuracy_mean']:.4f} ± {metrics[f'hop_{h}_accuracy_std']:.4f}")
-        print("="*30)
+    print("=" * 30)
 
     # 7. Save Artifacts
     output_dir = workspace_root / config["output_root"] / config["run_id"]
@@ -258,15 +251,16 @@ def main():
     with open(output_dir / "config.json", "w") as f:
         json.dump(config, f, indent=2)
 
+    preds = all_runs_predictions[0]
+    detailed_results = [
+        {"question": q, "expected": e, "predicted": p, "correct": p == e}
+        for q, e, p in zip(all_questions, all_expected, preds)
+    ]
+    detailed_fname = "detailed_results.json" if num_runs == 1 else "detailed_results_run_0.json"
+
     if num_runs == 1:
         with open(output_dir / "metrics.json", "w") as f:
             json.dump(metrics, f, indent=2)
-        detailed_results = [
-            {"question": q, "expected": e, "predicted": p, "correct": p == e}
-            for q, e, p in zip(all_questions, all_expected, predictions)
-        ]
-        with open(output_dir / "detailed_results.json", "w") as f:
-            json.dump(detailed_results, f, indent=2, ensure_ascii=False)
         notes = f"""Router Component Run - {config['run_id']}
 Model: {config['model_id']}
 Overall Accuracy: {metrics['overall_accuracy']:.4f}
@@ -277,16 +271,12 @@ Overall Accuracy: {metrics['overall_accuracy']:.4f}
                 json.dump(run_metrics, f, indent=2)
         with open(output_dir / "metrics_aggregated.json", "w") as f:
             json.dump(metrics, f, indent=2)
-        detailed_results = [
-            {"question": q, "expected": e, "predicted": p, "correct": p == e}
-            for q, e, p in zip(all_questions, all_expected, all_runs_predictions[0])
-        ]
-        with open(output_dir / "detailed_results_run_0.json", "w") as f:
-            json.dump(detailed_results, f, indent=2, ensure_ascii=False)
         notes = f"""Router Component Run - {config['run_id']} ({num_runs} runs averaged)
 Model: {config['model_id']}
 Overall Accuracy (mean ± std): {metrics['overall_accuracy_mean']:.4f} ± {metrics['overall_accuracy_std']:.4f}
 """
+    with open(output_dir / detailed_fname, "w") as f:
+        json.dump(detailed_results, f, indent=2, ensure_ascii=False)
     with open(output_dir / "notes.md", "w") as f:
         f.write(notes)
 

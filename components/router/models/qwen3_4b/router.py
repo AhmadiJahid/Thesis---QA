@@ -120,13 +120,13 @@ def main():
     # Merge CLI args into config
     config = {
         "seed": args.seed,
-        "model_id": args.model_id or base_config.get("model_id") or "Qwen/Qwen2.5-1.5B-Instruct",
+        "model_id": args.model_id or base_config.get("model_id"),
         "model_name": base_config.get("model_name", "qwen3_4b"),
         "data_dir": args.data_dir,
         "output_root": args.output_root,
         "run_id": datetime.now().strftime("%Y%m%d_%H%M%S"),
         "device": "cuda" if torch.cuda.is_available() else "cpu",
-        "max_new_tokens": 10,
+        "max_new_tokens": 64,
         "temperature": base_config.get("decoding", {}).get("temperature", 0.0),
         "top_p": base_config.get("decoding", {}).get("top_p", 1.0),
         "do_sample": base_config.get("decoding", {}).get("do_sample", False),

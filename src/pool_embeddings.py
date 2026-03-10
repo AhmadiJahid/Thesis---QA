@@ -36,6 +36,75 @@ def load_pool(path: Path) -> dict[str, list[dict[str, Any]]]:
     return {k: v for k, v in data.items() if k in ("2hop", "3hop") and isinstance(v, list)}
 
 
+def load_router_pool(path: Path) -> dict[str, list[dict[str, Any]]]:
+    """Load few_shot_router.json (1hop, 2hop, 3hop)."""
+    data = json.loads(path.read_text(encoding="utf-8"))
+    return {k: v for k, v in data.items() if k in ("1hop", "2hop", "3hop") and isinstance(v, list)}
+
+
+def get_router_pool_embeddings(
+    pool_path: Path,
+    cache_dir: Path | None = None,
+    model_id: str = "sentence-transformers/all-MiniLM-L6-v2",
+) -> tuple[list[dict], np.ndarray, Any]:
+    """
+    Return (all_items, all_embeddings, model) for router pool.
+    Combines 1hop, 2hop, 3hop into one pool for similarity search when hop is unknown.
+    """
+    try:
+        from sentence_transformers import SentenceTransformer
+    except ImportError:
+        raise ImportError("Install sentence-transformers: pip install sentence-transformers") from None
+
+    pool = load_router_pool(pool_path)
+    cache_dir = cache_dir or pool_path.parent / "embeddings_cache"
+    cache_dir = Path(cache_dir)
+    cache_dir.mkdir(parents=True, exist_ok=True)
+
+    all_items: list[dict] = []
+    for hop_key in ("1hop", "2hop", "3hop"):
+        all_items.extend(pool.get(hop_key, []))
+
+    questions = [it["question"] for it in all_items]
+    content_hash = _pool_hash(questions)
+    model_slug = _model_slug(model_id)
+    cache_file = cache_dir / f"embeddings_router_{model_slug}_{content_hash}.npz"
+
+    model = SentenceTransformer(model_id)
+    use_prefix = _needs_e5_prefix(model_id)
+
+    if cache_file.exists():
+        loaded = np.load(cache_file, allow_pickle=True)
+        emb = loaded["embeddings"]
+        items = loaded["items"].tolist()
+        return (items, emb, model)
+
+    to_encode = [f"passage: {q}" for q in questions] if use_prefix else questions
+    emb = model.encode(to_encode, normalize_embeddings=True)
+    np.savez_compressed(cache_file, embeddings=emb, items=np.array(all_items, dtype=object))
+    for f in cache_dir.glob(f"embeddings_router_{model_slug}_*.npz"):
+        if f != cache_file:
+            f.unlink(missing_ok=True)
+    return (all_items, emb, model)
+
+
+def top_k_similar_router(
+    query: str,
+    items: list[dict],
+    embeddings: np.ndarray,
+    model: Any,
+    model_id: str = "sentence-transformers/all-MiniLM-L6-v2",
+    k: int = 6,
+) -> list[tuple[dict, float]]:
+    """Top-k similar from combined router pool (hop unknown)."""
+    use_prefix = _needs_e5_prefix(model_id)
+    to_encode = [f"query: {query}"] if use_prefix else [query]
+    q_emb = model.encode(to_encode, normalize_embeddings=True)[0]
+    scores = np.dot(embeddings, q_emb)
+    idx_scores = sorted(enumerate(scores), key=lambda x: -x[1])
+    return [(items[idx], float(sim)) for idx, sim in idx_scores[:k]]
+
+
 def get_pool_embeddings(
     pool_path: Path,
     cache_dir: Path | None = None,
