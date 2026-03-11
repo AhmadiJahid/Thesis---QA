@@ -1,0 +1,11 @@
+{
+  "kb_path": "Data/kb.txt",
+  "corpus_paths": [
+    "Pool/few_shot_router.json",
+    "Data/refined_1hop.txt",
+    "Data/refined_2hop.txt",
+    "Data/refined_3hop.txt"
+  ],
+  "movie_placeholder": "[MOVIE]",
+  "person_placeholder": "[PERSON]"
+}

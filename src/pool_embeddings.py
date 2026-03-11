@@ -51,7 +51,13 @@ def get_router_pool_embeddings(
     """
     Return (all_items, all_embeddings, model) for router pool.
     Combines 1hop, 2hop, 3hop into one pool for similarity search when hop is unknown.
-    If mask_fn is provided, questions are masked before encoding (pool items have masked "question").
+
+    mask_fn: Optional callable to mask entities before encoding. Use build_masker from
+    entity_masking to create one (KB-based, [MOVIE]/[PERSON] placeholders). Enables
+    structure-only similarity. Example:
+        from entity_masking import build_masker
+        mask_fn = build_masker(kb_path, corpus_paths=corpus_paths)
+        items, emb, model = get_router_pool_embeddings(pool_path, mask_fn=mask_fn)
     """
     try:
         from sentence_transformers import SentenceTransformer

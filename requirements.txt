@@ -1,0 +1,8 @@
+# Thesis QA – core dependencies
+numpy
+sentence-transformers
+torch
+transformers
+
+# Entity masking (Aho-Corasick)
+pyahocorasick>=2.0.0
