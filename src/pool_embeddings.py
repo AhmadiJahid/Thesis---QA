@@ -9,7 +9,7 @@ from __future__ import annotations
 import hashlib
 import json
 from pathlib import Path
-from typing import Any
+from typing import Any, Callable
 
 import numpy as np
 
@@ -46,10 +46,12 @@ def get_router_pool_embeddings(
     pool_path: Path,
     cache_dir: Path | None = None,
     model_id: str = "sentence-transformers/all-MiniLM-L6-v2",
+    mask_fn: Callable[[str], str] | None = None,
 ) -> tuple[list[dict], np.ndarray, Any]:
     """
     Return (all_items, all_embeddings, model) for router pool.
     Combines 1hop, 2hop, 3hop into one pool for similarity search when hop is unknown.
+    If mask_fn is provided, questions are masked before encoding (pool items have masked "question").
     """
     try:
         from sentence_transformers import SentenceTransformer
@@ -65,10 +67,14 @@ def get_router_pool_embeddings(
     for hop_key in ("1hop", "2hop", "3hop"):
         all_items.extend(pool.get(hop_key, []))
 
+    if mask_fn:
+        all_items = [{**it, "question": mask_fn(it["question"])} for it in all_items]
+
     questions = [it["question"] for it in all_items]
     content_hash = _pool_hash(questions)
     model_slug = _model_slug(model_id)
-    cache_file = cache_dir / f"embeddings_router_{model_slug}_{content_hash}.npz"
+    suffix = "_masked" if mask_fn else ""
+    cache_file = cache_dir / f"embeddings_router_{model_slug}{suffix}_{content_hash}.npz"
 
     model = SentenceTransformer(model_id)
     use_prefix = _needs_e5_prefix(model_id)
@@ -82,7 +88,7 @@ def get_router_pool_embeddings(
     to_encode = [f"passage: {q}" for q in questions] if use_prefix else questions
     emb = model.encode(to_encode, normalize_embeddings=True)
     np.savez_compressed(cache_file, embeddings=emb, items=np.array(all_items, dtype=object))
-    for f in cache_dir.glob(f"embeddings_router_{model_slug}_*.npz"):
+    for f in cache_dir.glob(f"embeddings_router_{model_slug}{suffix}_*.npz"):
         if f != cache_file:
             f.unlink(missing_ok=True)
     return (all_items, emb, model)
