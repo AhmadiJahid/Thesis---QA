@@ -38,7 +38,7 @@ def load_few_shot_decompositions(workspace_root: Path) -> dict:
 
 
 def format_few_shot_examples(examples: list, hop_count: int) -> str:
-    """Format 6 (question, decomposition) pairs for the prompt."""
+    """Format (question, decomposition) pairs for the prompt."""
     blocks = []
     for ex in examples:
         blocks.append(
@@ -49,7 +49,7 @@ def format_few_shot_examples(examples: list, hop_count: int) -> str:
     return "\n\n".join(blocks)
 
 
-def sample_few_shot(few_shot_data: dict, hop_count: int, n: int = 6) -> list:
+def sample_few_shot(few_shot_data: dict, hop_count: int, n: int = 2) -> list:
     """Sample n random examples for the given hop. Fallback when similarity unavailable."""
     key = f"{hop_count}hop"
     pool = few_shot_data.get(key, [])
@@ -66,7 +66,7 @@ def get_similar_few_shot(
     few_shot_data: dict,
     embed_model,
     embed_model_id: str,
-    n: int = 6,
+    n: int = 2,
 ) -> list:
     """Get top-n most similar examples from pool. Fallback to random if unavailable."""
     from pool_embeddings import top_k_similar
@@ -240,10 +240,10 @@ def main():
             if pool_embeddings and embed_model:
                 sampled = get_similar_few_shot(
                     q, hop, pool_embeddings, few_shot_data,
-                    embed_model, embed_model_id, n=6,
+                    embed_model, embed_model_id, n=2,
                 )
             else:
-                sampled = sample_few_shot(few_shot_data, hop, n=6)
+                sampled = sample_few_shot(few_shot_data, hop, n=2)
             few_shot_str = format_few_shot_examples(sampled, hop)
             prompt = build_prompt(prompt_template, q, hop_input, few_shot_str)
             decomposition = decompose_question(

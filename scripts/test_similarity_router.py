@@ -34,30 +34,31 @@ def main() -> None:
     items, embeddings, model = get_router_pool_embeddings(pool_path, model_id=model_id)
     print(f"Pool: {len(items)} items (1hop+2hop+3hop combined)")
 
-    # 10 test questions - diverse mix (hop unknown at query time)
+    # 10 test questions - (question, og_hop) for ground-truth comparison
     test_questions = [
-        "who directed The Godfather",
-        "what are the genres of the movies acted by Tom Hanks",
-        "who starred in the films whose screenwriters also wrote Pulp Fiction",
-        "what was the release year of Titanic",
-        "which person directed the films acted by Meryl Streep",
-        "when did the films directed by the Inception director release",
-        "what languages are the movies that share actors with Forrest Gump in",
-        "describe The Shawshank Redemption",
-        "who are the directors of the movies written by Christopher Nolan",
-        "what genres do the movies that share directors with Avatar fall under",
+        ("who directed The Godfather", 1),
+        ("what are the genres of the movies acted by Tom Hanks", 2),
+        ("who starred in the films whose screenwriters also wrote Pulp Fiction", 3),
+        ("what was the release year of Titanic", 1),
+        ("which person directed the films acted by Meryl Streep", 2),
+        ("when did the films directed by the Inception director release", 2),
+        ("what languages are the movies that share actors with Forrest Gump in", 2),
+        ("describe The Shawshank Redemption", 1),
+        ("who are the directors of the movies written by Christopher Nolan", 2),
+        ("what genres do the movies that share directors with Avatar fall under", 2),
     ]
 
     print("\n" + "=" * 80)
     print("  TEST: 10 questions, hop count UNKNOWN – Top 6 similar from pool")
     print("=" * 80)
 
-    for i, query in enumerate(test_questions, 1):
+    for i, (query, og_hop) in enumerate(test_questions, 1):
         similar = top_k_similar_router(query, items, embeddings, model, model_id=model_id, k=6)
         hop_counts = [it["hop_count"] for it, _ in similar]
         majority_hop = max(set(hop_counts), key=hop_counts.count)
+        match = "✓" if majority_hop == og_hop else "✗"
         print(f"\n[{i}] Q: {query[:65]}{'…' if len(query) > 65 else ''}")
-        print(f"    Top 6 similar → hop_counts: {hop_counts}  (majority: {majority_hop})")
+        print(f"    og_hop: {og_hop}  |  Top 6 similar → hop_counts: {hop_counts}  (majority: {majority_hop})  {match}")
         for j, (it, sim) in enumerate(similar, 1):
             q = it["question"][:55] + "…" if len(it["question"]) > 55 else it["question"]
             print(f"    {j}. [hop={it['hop_count']}] [{sim:.3f}] {q}")
