@@ -37,61 +37,58 @@ def load_few_shot_decompositions(workspace_root: Path) -> dict:
         return json.load(f)
 
 
-def format_few_shot_examples(examples: list, hop_count: int) -> str:
-    """Format (question, decomposition) pairs for the prompt."""
+def format_few_shot_examples(examples: list, hop_count: int | None = None) -> str:
+    """Format (question, decomposition) pairs for the prompt. Omit hop line when unguided (hop_count is None)."""
     blocks = []
     for ex in examples:
-        blocks.append(
-            f"Hop count: {hop_count}\n"
-            f"Question: {ex['question']}\n"
-            f"Decomposition:\n{ex['decomposition']}"
-        )
+        if hop_count is not None:
+            block = f"Hop count: {hop_count}\nQuestion: {ex['question']}\nDecomposition:\n{ex['decomposition']}"
+        else:
+            block = f"Question: {ex['question']}\nDecomposition:\n{ex['decomposition']}"
+        blocks.append(block)
     return "\n\n".join(blocks)
 
 
-def sample_few_shot(few_shot_data: dict, hop_count: int, n: int = 2) -> list:
-    """Sample n random examples for the given hop. Fallback when similarity unavailable."""
-    key = f"{hop_count}hop"
-    pool = few_shot_data.get(key, [])
+def _all_decomposer_items(few_shot_data: dict) -> list:
+    """Combined pool (1hop, 2hop, 3hop) for fallback sampling."""
+    out = []
+    for key in ("1hop", "2hop", "3hop"):
+        out.extend(few_shot_data.get(key, []))
+    return out
+
+
+def sample_few_shot_combined(few_shot_data: dict, n: int = 3) -> list:
+    """Sample n random examples from combined pool. Fallback when similarity unavailable."""
+    pool = _all_decomposer_items(few_shot_data)
     if len(pool) <= n:
         return pool
-    rng = random.Random()
-    return rng.sample(pool, n)
+    return random.sample(pool, n)
 
 
-def get_similar_few_shot(
+def get_similar_decomposer(
     question: str,
-    hop_count: int,
-    pool_embeddings: dict,
-    few_shot_data: dict,
+    mask_fn,
+    decomposer_items: list,
+    decomposer_embeddings,
     embed_model,
     embed_model_id: str,
-    n: int = 2,
-) -> list:
-    """Get top-n most similar examples from pool. Fallback to random if unavailable."""
-    from pool_embeddings import top_k_similar
-    key = f"{hop_count}hop"
-    similar = top_k_similar(
-        question, key, pool_embeddings, k=n,
-        model_id=embed_model_id, model=embed_model,
+    n: int = 3,
+) -> tuple[list, list[tuple[dict, float]]]:
+    """Get top-n most similar examples by masked similarity. Returns (items, items_with_scores)."""
+    from pool_embeddings import top_k_similar_decomposer
+    masked_q = mask_fn(question)
+    similar = top_k_similar_decomposer(
+        masked_q, decomposer_items, decomposer_embeddings,
+        embed_model, embed_model_id, k=n,
     )
-    items = [it for it, _ in similar]
-    if len(items) >= n:
-        return items
-    # Fallback: fill remaining with random from pool
-    pool = few_shot_data.get(key, [])
-    existing_qs = {it["question"] for it in items}
-    remaining = [x for x in pool if x["question"] not in existing_qs]
-    need = n - len(items)
-    if need > 0 and remaining:
-        extra = random.sample(remaining, min(need, len(remaining)))
-        items.extend(extra)
-    return items[:n]
+    return ([it for it, _ in similar], similar)
 
 
-def build_prompt(template: str, question: str, hop_count: int = None, few_shot_examples: str = "") -> str:
-    h = hop_count if hop_count is not None else "Unknown"
-    return template.format(question=question, hop_count=h, few_shot_examples=few_shot_examples)
+def build_prompt(template: str, question: str, hop_count: int | None = None, few_shot_examples: str = "") -> str:
+    """When hop_count is None (unguided), template must not contain {hop_count}."""
+    if hop_count is not None:
+        return template.format(question=question, hop_count=hop_count, few_shot_examples=few_shot_examples)
+    return template.format(question=question, few_shot_examples=few_shot_examples)
 
 def decompose_question(question: str, hop_count, model, tokenizer, device, prompt_template, config, few_shot_examples: str = "", prompt: str = None):
     if prompt is None:
@@ -168,27 +165,41 @@ def main():
     set_seed(config["seed"])
     print(f"Starting Decomposer Run: {config['run_id']} (Guided: {config['guided']})")
 
-    # 2. Load Prompt Template
-    prompt_path = script_dir / base_config.get("prompt_file", "prompt.md")
+    # 2. Load Prompt Template (guided vs unguided)
+    workspace_root = Path(__file__).resolve().parents[4]
+    prompt_file = "prompt_unguided.md" if not config["guided"] else base_config.get("prompt_file", "prompt.md")
+    prompt_path = script_dir / prompt_file
+    if not prompt_path.exists():
+        prompt_path = script_dir / base_config.get("prompt_file", "prompt.md")
     with open(prompt_path, "r") as f:
         prompt_template = f.read()
 
     # 3. Load Data & Few-Shot Pool
-    workspace_root = Path(__file__).resolve().parents[4]
     data_path = workspace_root / config["data_dir"]
     few_shot_data = load_few_shot_decompositions(workspace_root)
 
-    # 3b. Load pool embeddings for similarity-based few-shot
+    # 3b. Load decomposer pool embeddings (masked, combined) and mask_fn
     pool_path = workspace_root / "Pool" / "few_shot_decompositions.json"
+    decomposer_items = []
+    decomposer_embeddings = None
+    embed_model = None
+    mask_fn = None
     if pool_path.exists():
-        from pool_embeddings import get_pool_embeddings
+        from pool_embeddings import get_decomposer_pool_embeddings
         from sentence_transformers import SentenceTransformer
-        print(f"Loading embeddings ({args.embed_model}) for similarity few-shot...")
-        pool_embeddings = get_pool_embeddings(pool_path, model_id=embed_model_id)
-        embed_model = SentenceTransformer(embed_model_id)
-    else:
-        pool_embeddings = {}
-        embed_model = None
+        from entity_masking import build_masker
+        mask_cfg = json.loads((workspace_root / "configs" / "masking.json").read_text())
+        mask_fn = build_masker(
+            workspace_root / mask_cfg["kb_path"],
+            corpus_paths=[workspace_root / p for p in mask_cfg["corpus_paths"]],
+            movie_placeholder=mask_cfg.get("movie_placeholder", "[MOVIE]"),
+            person_placeholder=mask_cfg.get("person_placeholder", "[PERSON]"),
+            repo_root=workspace_root,
+        )
+        print(f"Loading decomposer pool embeddings ({args.embed_model}, masked)...")
+        decomposer_items, decomposer_embeddings, embed_model = get_decomposer_pool_embeddings(
+            pool_path, model_id=embed_model_id
+        )
     
     hops = [1, 2, 3]
     all_questions = []
@@ -233,29 +244,38 @@ def main():
         if (i + 1) % 10 == 0:
             print(f"Processed {i + 1}/{len(all_questions)}...")
 
-        if hop == 1:
-            decomposition = q
-        else:
-            hop_input = hop
-            if pool_embeddings and embed_model:
-                sampled = get_similar_few_shot(
-                    q, hop, pool_embeddings, few_shot_data,
-                    embed_model, embed_model_id, n=2,
-                )
-            else:
-                sampled = sample_few_shot(few_shot_data, hop, n=2)
-            few_shot_str = format_few_shot_examples(sampled, hop)
-            prompt = build_prompt(prompt_template, q, hop_input, few_shot_str)
-            decomposition = decompose_question(
-                q, hop_input, model, tokenizer, config["device"],
-                prompt_template, config, few_shot_examples=few_shot_str,
-                prompt=prompt,
+        hop_input = hop if config["guided"] else None
+        sampled_with_scores = []
+        if decomposer_items and decomposer_embeddings is not None and embed_model and mask_fn:
+            sampled, sampled_with_scores = get_similar_decomposer(
+                q, mask_fn, decomposer_items, decomposer_embeddings,
+                embed_model, embed_model_id, n=3,
             )
-            if (i + 1) % 5 == 0:
-                log_path = prompts_dir / f"prompt_idx{i+1:04d}_hop{hop}.txt"
-                log_content = prompt + "\n" + decomposition
-                log_path.write_text(log_content, encoding="utf-8")
-                print(f"  Logged prompt+response to {log_path.name}")
+        else:
+            sampled = sample_few_shot_combined(few_shot_data, n=3)
+        few_shot_str = format_few_shot_examples(sampled, hop_input)
+        prompt = build_prompt(prompt_template, q, hop_input, few_shot_str)
+        decomposition = decompose_question(
+            q, hop_input, model, tokenizer, config["device"],
+            prompt_template, config, few_shot_examples=few_shot_str,
+            prompt=prompt,
+        )
+        if (i + 1) % 5 == 0:
+            log_path = prompts_dir / f"prompt_idx{i+1:04d}_hop{hop}.txt"
+            masked_q = mask_fn(q) if mask_fn else "N/A"
+            header = (
+                "--- Log Header ---\n"
+                f"Question (original): {q}\n"
+                f"Question (masked): {masked_q}\n"
+                "Top 3 similar examples:\n"
+            )
+            for j, (it, score) in enumerate(sampled_with_scores, 1):
+                header += f"  {j}. sim={score:.4f} | masked={it['masked']} | question={it['question']}\n"
+            if not sampled_with_scores:
+                header += "  (random sampling, no similarity scores)\n"
+            log_content = header + "\n--- Prompt + Response ---\n" + prompt + "\n" + decomposition
+            log_path.write_text(log_content, encoding="utf-8")
+            print(f"  Logged prompt+response to {log_path.name}")
 
         results.append({
             "question": q,
