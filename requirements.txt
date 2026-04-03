@@ -1,8 +1,11 @@
 # Thesis QA – core dependencies
 numpy
+scikit-learn
+matplotlib
 sentence-transformers
 torch
 transformers
+datasets
 
 # Entity masking (Aho-Corasick)
 pyahocorasick>=2.0.0
