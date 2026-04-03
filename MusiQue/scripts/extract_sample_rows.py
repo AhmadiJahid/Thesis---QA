@@ -11,6 +11,8 @@ LINES = [
     658, 444, 2110, 3086, 388, 404, 1837, 656, 2848, 796,
 ]
 
+
+
 BASE_DIR = Path("/cta/users/fyilmaz/Thesis---QA/MusiQue/Data/chunks_only_question_masked")
 FILENAME = "musique_ans_v1.0_train_0_questions_2_hop.jsonl"
 OUT_DIR = Path("/cta/users/fyilmaz/Thesis---QA/MusiQue/Data/sample_extracts")

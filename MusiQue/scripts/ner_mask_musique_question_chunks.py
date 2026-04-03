@@ -1,29 +1,24 @@
 #!/usr/bin/env python3
 """
-Apply NER masking to MusiQue stratum question JSONLs (id, question, index).
+Improved NER masking for MusiQue question JSONLs.
 
-Default: one JSONL per input under <model_slug>/ with columns side-by-side::
+Key changes from the user's original script:
+- defaults to RoBERTa-large NER first (cleaner spans in your sample outputs)
+- uses a safer typed label set: PERSON / ORG / PLACE / DATE / NUM / ENTITY
+  instead of mapping all MISC spans to [WORK]
+- adds span filtering for generic/common false positives
+- compresses broken adjacent placeholder runs such as
+  [PERSON][PLACE] [PERSON][PLACE][PERSON] -> [PERSON]
+- removes artifacts like [ENTITY]3 -> [ENTITY]
+- supports a typed output and a uniform [MASK] output from the same spans
+- keeps the same JSONL I/O style as your current pipeline
 
-    id, index, question, question_masked_typed, question_masked_uniform
-
-Use --split-typed-uniform-dirs for legacy <model_slug>/typed/ and uniform/ subdirs.
-
-Default models: dslim/bert-large-NER and Jean-Baptiste/roberta-large-ner-english.
-
-Loads each JSONL into a Hugging Face ``datasets.Dataset`` and passes it to the
-transformers pipeline via ``KeyDataset``, enabling proper ``DataLoader``-based GPU
-batching (``--batch-size``, default 16).  Entity spans are reused for both typed
-and uniform masks (one forward pass per row, not two).
-
-Run with the project venv::
-
-    source .venv/bin/activate
-    python MusiQue/scripts/ner_mask_musique_question_chunks.py --seed 42
-
-Train chunk 0 only::
-
-    python MusiQue/scripts/ner_mask_musique_question_chunks.py --seed 42 \\
-      --input-glob 'MusiQue/Data/chunks_only_question/musique_ans_v1.0_train_0_questions_*.jsonl'
+Example:
+    python MusiQue/scripts/ner_mask_musique_question_chunks_fixed.py \
+      --seed 42 \
+      --device 0 \
+      --input-glob 'MusiQue/Data/chunks_only_question/musique_ans_v1.0_train_0_questions_*.jsonl' \
+      --overwrite
 """
 
 from __future__ import annotations
@@ -33,9 +28,10 @@ import glob
 import json
 import re
 import sys
+from collections import Counter
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Any
+from typing import Any, Iterable
 
 from datasets import Dataset
 
@@ -43,11 +39,23 @@ REPO_ROOT = Path(__file__).resolve().parent.parent.parent
 sys.path.insert(0, str(REPO_ROOT / "src"))
 
 _DEFAULT_MODELS = (
-    "dslim/bert-large-NER",
     "Jean-Baptiste/roberta-large-ner-english",
+    "dslim/bert-large-NER",
 )
 
-# Conservative DATE patterns (English); heuristic only.
+_UNIFORM_TOKEN = "[MASK]"
+_FALLBACK_TYPED = "[ENTITY]"
+_TYPED_PRIORITY = {
+    "[PERSON]": 6,
+    "[ORG]": 5,
+    "[PLACE]": 4,
+    "[DATE]": 3,
+    "[NUM]": 2,
+    "[ENTITY]": 1,
+}
+_PLACEHOLDER_RE = re.compile(r"\[(?:PERSON|ORG|PLACE|DATE|NUM|ENTITY|MASK)\]")
+
+# Conservative English date patterns.
 _DATE_RES = (
     re.compile(r"\b\d{1,2}[/-]\d{1,2}[/-]\d{2,4}\b"),
     re.compile(
@@ -56,8 +64,40 @@ _DATE_RES = (
         r"\s+\d{1,2},?\s+\d{4}\b",
         re.IGNORECASE,
     ),
+    re.compile(r"\b\d{4}s\b"),
+    re.compile(r"\b\d{4}\b"),
 )
-_NUM_RE = re.compile(r"\b\d+(?:\.\d+)?\b")
+_NUM_RE = re.compile(r"\b\d+(?:[.,]\d+)?(?:\s?(?:%|percent|million|billion|thousand))?\b", re.IGNORECASE)
+
+# Protect common generic phrases that often should not be masked as entities.
+_GENERIC_REJECTIONS = {
+    "senate",
+    "president of the senate",
+    "house",
+    "parliament",
+    "government",
+    "earth",
+    "world",
+}
+
+# Ambiguous but common phrases we would rather keep unmasked than mask incorrectly.
+_LITERAL_KEEP_LOWER = {
+    "lok sabha",
+    "doctor who",
+    "la liga",
+    "united states",
+    "us",
+    "u.s.",
+}
+
+# Simple literal spans that are often worth masking if the NER model misses them.
+_LITERAL_TYPE_HINTS = {
+    "united states": "[PLACE]",
+    "u.s.": "[PLACE]",
+    "us": "[PLACE]",
+    "india": "[PLACE]",
+    "england": "[PLACE]",
+}
 
 
 def _sanitize_slug(s: str) -> str:
@@ -65,20 +105,13 @@ def _sanitize_slug(s: str) -> str:
 
 
 def _load_tokenizer_for_ner(model_name: str) -> Any:
-    """
-    Some Hub checkpoints (e.g. certain DeBERTa NER models) ship without a usable
-    fast tokenizer file; fall back to the Python (slow) tokenizer.
-    """
     from transformers import AutoTokenizer
 
     try:
         return AutoTokenizer.from_pretrained(model_name, use_fast=True)
     except Exception:
         tok = AutoTokenizer.from_pretrained(model_name, use_fast=False)
-        print(
-            "  Note: using slow tokenizer (use_fast=False); "
-            "fast tokenizer file missing or invalid for this checkpoint."
-        )
+        print("  Note: using slow tokenizer (use_fast=False).")
         return tok
 
 
@@ -89,11 +122,23 @@ def _typed_placeholders() -> dict[str, str]:
         "ORG": "[ORG]",
         "LOC": "[PLACE]",
         "GPE": "[PLACE]",
-        "MISC": "[WORK]",
+        "FAC": "[PLACE]",
+        "DATE": "[DATE]",
+        "TIME": "[DATE]",
+        "CARDINAL": "[NUM]",
+        "ORDINAL": "[NUM]",
+        "QUANTITY": "[NUM]",
+        "PERCENT": "[NUM]",
+        "MONEY": "[NUM]",
+        # Ambiguous classes go to a safe fallback instead of [WORK].
+        "MISC": "[ENTITY]",
+        "NORP": "[ENTITY]",
+        "EVENT": "[ENTITY]",
+        "WORK_OF_ART": "[ENTITY]",
+        "PRODUCT": "[ENTITY]",
+        "LAW": "[ENTITY]",
+        "LANGUAGE": "[ENTITY]",
     }
-
-_UNIFORM_TOKEN = "[MASK]"
-_FALLBACK_TYPED = "[ENTITY]"
 
 
 def _normalize_entity_label(label: object) -> str:
@@ -101,231 +146,6 @@ def _normalize_entity_label(label: object) -> str:
     if len(s) >= 2 and s[1] == "-":
         s = s[2:]
     return s.upper()
-
-
-_MAX_MERGE_GAP = 3  # merge adjacent same-type NER spans separated by <= 3 chars
-
-
-def _merge_ner_spans(spans: list[tuple[int, int, str]]) -> list[tuple[int, int, str]]:
-    """
-    Sort, drop overlaps, and merge adjacent same-type spans whose gap is
-    at most ``_MAX_MERGE_GAP`` characters (handles "Kyeon Mi-ri" split into
-    two PER spans with a short gap).
-    """
-    spans = sorted(spans, key=lambda x: x[0])
-    merged: list[tuple[int, int, str]] = []
-    for s, e, ph in spans:
-        if merged:
-            ps, pe, pph = merged[-1]
-            if s < pe:
-                continue
-            if pph == ph and (s - pe) <= _MAX_MERGE_GAP:
-                merged[-1] = (ps, e, ph)
-                continue
-        merged.append((s, e, ph))
-    return merged
-
-
-def _overlaps_blocked(s: int, e: int, blocked: list[tuple[int, int]]) -> bool:
-    for bs, be in blocked:
-        if s < be and bs < e:
-            return True
-    return False
-
-
-def _merge_intervals(intervals: list[tuple[int, int]]) -> list[tuple[int, int]]:
-    if not intervals:
-        return []
-    intervals = sorted(intervals)
-    out: list[tuple[int, int]] = [intervals[0]]
-    for s, e in intervals[1:]:
-        ps, pe = out[-1]
-        if s <= pe:
-            out[-1] = (ps, max(pe, e))
-        else:
-            out.append((s, e))
-    return out
-
-
-def _regex_spans(text: str, ner_blocked: list[tuple[int, int]], typed: bool) -> list[tuple[int, int, str, int]]:
-    """DATE (priority 1) in gaps of NER; NUM (priority 2) in gaps of NER+DATE."""
-    blocked = sorted(ner_blocked)
-    date_ivs: list[tuple[int, int]] = []
-    for rx in _DATE_RES:
-        for m in rx.finditer(text):
-            if not _overlaps_blocked(m.start(), m.end(), blocked):
-                date_ivs.append((m.start(), m.end()))
-    date_merged = _merge_intervals(date_ivs)
-    blocked2 = blocked + list(date_merged)
-    out: list[tuple[int, int, str, int]] = []
-    for s, e in date_merged:
-        ph = "[DATE]" if typed else _UNIFORM_TOKEN
-        out.append((s, e, ph, 1))
-    num_ivs: list[tuple[int, int]] = []
-    for m in _NUM_RE.finditer(text):
-        if not _overlaps_blocked(m.start(), m.end(), sorted(blocked2)):
-            num_ivs.append((m.start(), m.end()))
-    num_merged = _merge_intervals(num_ivs)
-    for s, e in num_merged:
-        ph = "[NUM]" if typed else _UNIFORM_TOKEN
-        out.append((s, e, ph, 2))
-    return out
-
-
-def _merge_prioritized(spans_pri: list[tuple[int, int, str, int]]) -> list[tuple[int, int, str]]:
-    """Earlier span wins on overlap; tie-break by priority then longer span."""
-    spans_pri = sorted(
-        spans_pri,
-        key=lambda x: (x[0], x[3], -(x[1] - x[0])),
-    )
-    merged: list[tuple[int, int, str]] = []
-    last_end = -1
-    for s, e, ph, _ in spans_pri:
-        if s < last_end:
-            continue
-        merged.append((s, e, ph))
-        last_end = e
-    return merged
-
-
-def _apply_spans(text: str, spans: list[tuple[int, int, str]]) -> str:
-    if not spans:
-        return text
-    spans = sorted(spans, key=lambda x: x[0])
-    parts: list[str] = []
-    last = 0
-    for s, e, ph in spans:
-        parts.append(text[last:s])
-        parts.append(ph)
-        last = e
-    parts.append(text[last:])
-    return "".join(parts)
-
-
-def _ner_placeholder(label: object, typed_mode: bool) -> str:
-    if not typed_mode:
-        return _UNIFORM_TOKEN
-    key = _normalize_entity_label(label)
-    typed = _typed_placeholders()
-    return typed.get(key, _FALLBACK_TYPED)
-
-
-def _entities_to_spans(entities: list[dict[str, Any]] | None, typed_mode: bool) -> list[tuple[int, int, str]]:
-    """Build merged spans from one pipeline entity list (grouped_entities)."""
-    if not entities:
-        return []
-    spans: list[tuple[int, int, str]] = []
-    for ent in entities:
-        start = ent.get("start")
-        end = ent.get("end")
-        if start is None or end is None:
-            continue
-        label = ent.get("entity_group") or ent.get("entity") or ent.get("label")
-        ph = _ner_placeholder(label, typed_mode)
-        spans.append((int(start), int(end), ph))
-    return _merge_ner_spans(spans)
-
-
-def _mask_from_entities(
-    entities: list[dict[str, Any]] | None,
-    text: str,
-    *,
-    typed_mode: bool,
-    use_regex: bool,
-) -> str:
-    """Apply NER spans + optional regex; one NER prediction set per row (reuse for typed + uniform)."""
-    if not text:
-        return ""
-    ner_spans = _entities_to_spans(entities, typed_mode)
-    blocked = [(s, e) for s, e, _ in ner_spans]
-    spans_pri: list[tuple[int, int, str, int]] = [(s, e, ph, 0) for s, e, ph in ner_spans]
-    if use_regex:
-        for rs, re_, ph, pri in _regex_spans(text, blocked, typed_mode):
-            spans_pri.append((rs, re_, ph, pri))
-    merged = _merge_prioritized(spans_pri)
-    return _apply_spans(text, merged)
-
-
-def _predict_entities_dataset(
-    ner_pipe: Any,
-    ds: Dataset,
-    batch_size: int,
-) -> list[list[dict[str, Any]]]:
-    """
-    Run token-classification pipeline over a ``datasets.Dataset`` using the
-    transformers ``KeyDataset`` wrapper.  This feeds a real ``DataLoader`` to
-    the pipeline, enabling proper GPU batching (no "sequential on GPU" warning).
-    Returns one entity list per row (same order as input).
-    """
-    from transformers.pipelines.pt_utils import KeyDataset
-
-    out: list[list[dict[str, Any]]] = []
-    for item in ner_pipe(KeyDataset(ds, "question"), batch_size=batch_size):
-        if item is None:
-            out.append([])
-        elif isinstance(item, list):
-            out.append(item)
-        elif isinstance(item, dict):
-            out.append([item])
-        else:
-            out.append([])
-    if len(out) != len(ds):
-        raise RuntimeError(f"NER output length mismatch: got {len(out)}, expected {len(ds)}")
-    return out
-
-
-def _parse_args() -> argparse.Namespace:
-    p = argparse.ArgumentParser(description=__doc__)
-    p.add_argument("--inputs", nargs="*", type=Path, help="Question JSONL files (ordered)")
-    p.add_argument(
-        "--input-glob",
-        type=str,
-        default=None,
-        help="Glob under chunks_only_question (excludes *_questions_all.jsonl by default)",
-    )
-    p.add_argument(
-        "--out-dir",
-        type=Path,
-        default=REPO_ROOT / "MusiQue" / "Data" / "chunks_only_question_masked",
-        help="Root directory; each model writes under <slug>/ (combined JSONL by default)",
-    )
-    p.add_argument(
-        "--run-dir",
-        type=Path,
-        default=REPO_ROOT / "runs" / "musique_question_ner_mask",
-        help="metrics.json + notes.md",
-    )
-    p.add_argument(
-        "--ner-model",
-        action="append",
-        dest="ner_models",
-        default=None,
-        help="HF model id (repeatable). If omitted, defaults to bert-large-NER + roberta-large-ner-english",
-    )
-    p.add_argument("--device", type=int, default=-1, help="Transformers device id (-1 = CPU)")
-    p.add_argument(
-        "--batch-size",
-        type=int,
-        default=16,
-        help="Sequences per forward pass for GPU NER (pipeline batching)",
-    )
-    p.add_argument("--seed", type=int, default=42, help="Logged in metrics.json")
-    p.add_argument(
-        "--no-regex-num-date",
-        action="store_true",
-        help="Disable heuristic [NUM]/[DATE] regex pass in gaps after NER",
-    )
-    p.add_argument(
-        "--overwrite",
-        action="store_true",
-        help="Overwrite existing output JSONLs",
-    )
-    p.add_argument(
-        "--split-typed-uniform-dirs",
-        action="store_true",
-        help="Write <slug>/typed/ and <slug>/uniform/ (two files per input) instead of one combined file",
-    )
-    return p.parse_args()
 
 
 def _load_jsonl_records(path: Path) -> list[dict[str, Any]]:
@@ -364,6 +184,316 @@ def _resolve_inputs(args: argparse.Namespace) -> list[Path]:
     return [Path(p).resolve() for p in paths]
 
 
+def _parse_args() -> argparse.Namespace:
+    p = argparse.ArgumentParser(description=__doc__)
+    p.add_argument("--inputs", nargs="*", type=Path, help="Question JSONL files (ordered)")
+    p.add_argument(
+        "--input-glob",
+        type=str,
+        default=None,
+        help="Glob under chunks_only_question (excludes *_questions_all.jsonl by default)",
+    )
+    p.add_argument(
+        "--out-dir",
+        type=Path,
+        default=REPO_ROOT / "MusiQue" / "Data" / "chunks_only_question_masked_fixed",
+        help="Root directory; each model writes under <slug>/",
+    )
+    p.add_argument(
+        "--run-dir",
+        type=Path,
+        default=REPO_ROOT / "runs" / "musique_question_ner_mask_fixed",
+        help="metrics.json + notes.md",
+    )
+    p.add_argument(
+        "--ner-model",
+        action="append",
+        dest="ner_models",
+        default=None,
+        help="HF model id (repeatable). If omitted, defaults to roberta-large then bert-large.",
+    )
+    p.add_argument("--device", type=int, default=-1, help="Transformers device id (-1 = CPU)")
+    p.add_argument("--batch-size", type=int, default=16)
+    p.add_argument("--seed", type=int, default=42)
+    p.add_argument("--overwrite", action="store_true")
+    p.add_argument(
+        "--split-typed-uniform-dirs",
+        action="store_true",
+        help="Write <slug>/typed/ and <slug>/uniform/ instead of one combined file",
+    )
+    p.add_argument(
+        "--no-regex-num-date",
+        action="store_true",
+        help="Disable heuristic [NUM]/[DATE] regex pass",
+    )
+    p.add_argument(
+        "--literal-place-hints",
+        action="store_true",
+        help="Also mask a small literal list such as U.S. / United States when the NER model misses them",
+    )
+    return p.parse_args()
+
+
+def _ner_placeholder(label: object, typed_mode: bool) -> str:
+    if not typed_mode:
+        return _UNIFORM_TOKEN
+    key = _normalize_entity_label(label)
+    return _typed_placeholders().get(key, _FALLBACK_TYPED)
+
+
+def _is_probably_generic_or_bad_span(span_text: str, label: str) -> bool:
+    raw = span_text.strip()
+    low = raw.lower()
+    if not raw:
+        return True
+    if low in _GENERIC_REJECTIONS:
+        return True
+    # Reject single lowercase common tokens unless they are strongly typed.
+    if raw.islower() and " " not in raw and label not in {"[DATE]", "[NUM]"}:
+        return True
+    # Reject pure punctuation.
+    if not any(ch.isalnum() for ch in raw):
+        return True
+    return False
+
+
+def _score(ent: dict[str, Any]) -> float:
+    s = ent.get("score")
+    try:
+        return float(s)
+    except Exception:
+        return 0.0
+
+
+def _entities_to_spans(
+    entities: list[dict[str, Any]] | None,
+    text: str,
+    *,
+    typed_mode: bool,
+) -> list[tuple[int, int, str]]:
+    if not entities:
+        return []
+
+    spans: list[tuple[int, int, str, float]] = []
+    for ent in entities:
+        start = ent.get("start")
+        end = ent.get("end")
+        if start is None or end is None:
+            continue
+        s = int(start)
+        e = int(end)
+        if s >= e or s < 0 or e > len(text):
+            continue
+        ph = _ner_placeholder(ent.get("entity_group") or ent.get("entity") or ent.get("label"), typed_mode)
+        piece = text[s:e]
+        if piece.strip().lower() in _LITERAL_KEEP_LOWER:
+            continue
+        if _is_probably_generic_or_bad_span(piece, ph):
+            continue
+        spans.append((s, e, ph, _score(ent)))
+
+    return _merge_and_clean_spans(text, spans)
+
+
+def _merge_and_clean_spans(
+    text: str,
+    spans: list[tuple[int, int, str, float]],
+) -> list[tuple[int, int, str]]:
+    if not spans:
+        return []
+
+    spans = sorted(spans, key=lambda x: (x[0], x[1], -x[3]))
+    merged: list[tuple[int, int, str, float]] = []
+    for s, e, ph, sc in spans:
+        if not merged:
+            merged.append((s, e, ph, sc))
+            continue
+
+        ps, pe, pph, psc = merged[-1]
+        gap = text[pe:s] if s >= pe else ""
+        # Overlap: keep the longer span, or the higher score if similar.
+        if s < pe:
+            prev_len = pe - ps
+            cur_len = e - s
+            choose_cur = (cur_len > prev_len) or (cur_len == prev_len and sc > psc)
+            if choose_cur:
+                merged[-1] = (s, e, ph, sc)
+            continue
+
+        # Merge same placeholder across tiny punctuation/space gaps.
+        if pph == ph and s >= pe and gap and len(gap) <= 4 and not any(ch.isalnum() for ch in gap):
+            merged[-1] = (ps, e, ph, max(psc, sc))
+            continue
+
+        merged.append((s, e, ph, sc))
+
+    return [(s, e, ph) for s, e, ph, _ in merged]
+
+
+def _overlaps_blocked(s: int, e: int, blocked: list[tuple[int, int]]) -> bool:
+    for bs, be in blocked:
+        if s < be and bs < e:
+            return True
+    return False
+
+
+def _merge_intervals(intervals: list[tuple[int, int]]) -> list[tuple[int, int]]:
+    if not intervals:
+        return []
+    intervals = sorted(intervals)
+    out: list[tuple[int, int]] = [intervals[0]]
+    for s, e in intervals[1:]:
+        ps, pe = out[-1]
+        if s <= pe:
+            out[-1] = (ps, max(pe, e))
+        else:
+            out.append((s, e))
+    return out
+
+
+def _regex_spans(text: str, blocked: list[tuple[int, int]], typed: bool) -> list[tuple[int, int, str]]:
+    out: list[tuple[int, int, str]] = []
+
+    date_ivs: list[tuple[int, int]] = []
+    for rx in _DATE_RES:
+        for m in rx.finditer(text):
+            if not _overlaps_blocked(m.start(), m.end(), blocked):
+                date_ivs.append((m.start(), m.end()))
+    date_merged = _merge_intervals(date_ivs)
+    blocked2 = blocked + date_merged
+    for s, e in date_merged:
+        out.append((s, e, "[DATE]" if typed else _UNIFORM_TOKEN))
+
+    num_ivs: list[tuple[int, int]] = []
+    for m in _NUM_RE.finditer(text):
+        if not _overlaps_blocked(m.start(), m.end(), blocked2):
+            num_ivs.append((m.start(), m.end()))
+    for s, e in _merge_intervals(num_ivs):
+        out.append((s, e, "[NUM]" if typed else _UNIFORM_TOKEN))
+
+    return out
+
+
+def _literal_hint_spans(text: str, blocked: list[tuple[int, int]], typed: bool) -> list[tuple[int, int, str]]:
+    out: list[tuple[int, int, str]] = []
+    text_lower = text.lower()
+    for lit, placeholder in _LITERAL_TYPE_HINTS.items():
+        start = 0
+        while True:
+            idx = text_lower.find(lit, start)
+            if idx == -1:
+                break
+            end = idx + len(lit)
+            if not _overlaps_blocked(idx, end, blocked):
+                out.append((idx, end, placeholder if typed else _UNIFORM_TOKEN))
+            start = end
+    return out
+
+
+def _apply_spans(text: str, spans: list[tuple[int, int, str]]) -> str:
+    if not spans:
+        return text
+    spans = sorted(spans, key=lambda x: x[0])
+    parts: list[str] = []
+    last = 0
+    for s, e, ph in spans:
+        parts.append(text[last:s])
+        parts.append(ph)
+        last = e
+    parts.append(text[last:])
+    return "".join(parts)
+
+
+def _best_placeholder(placeholders: Iterable[str], uniform: bool) -> str:
+    vals = list(placeholders)
+    if uniform:
+        return _UNIFORM_TOKEN
+    counts = Counter(vals)
+    # choose most common; break ties with priority
+    best = sorted(counts.items(), key=lambda kv: (kv[1], _TYPED_PRIORITY.get(kv[0], 0)), reverse=True)[0][0]
+    return best
+
+
+def _compress_placeholder_runs(text: str, typed_mode: bool) -> str:
+    # Collapse runs such as [PERSON][PLACE] [PERSON] -> [PERSON]
+    pattern = re.compile(
+        r"((?:\[(?:PERSON|ORG|PLACE|DATE|NUM|ENTITY|MASK)\](?:[\s'’.,;/:-]*)?){2,})"
+    )
+
+    def repl(match: re.Match[str]) -> str:
+        chunk = match.group(1)
+        tokens = _PLACEHOLDER_RE.findall(chunk)
+        return _best_placeholder(tokens, uniform=not typed_mode)
+
+    out = pattern.sub(repl, text)
+    # Remove attached digits: [ENTITY]3 -> [ENTITY]
+    out = re.sub(r"(\[(?:PERSON|ORG|PLACE|DATE|NUM|ENTITY|MASK)\])(?=\d)", r"\1 ", out)
+    out = re.sub(r"\s+", " ", out).strip()
+    return out
+
+
+def _cleanup_masked_text(text: str, typed_mode: bool) -> str:
+    out = _compress_placeholder_runs(text, typed_mode=typed_mode)
+    # Normalize spaces before punctuation and possessives.
+    out = re.sub(r"\s+([,.;:?!])", r"\1", out)
+    out = re.sub(r"\[(PERSON|ORG|PLACE|DATE|NUM|ENTITY|MASK)\]\s+'s", r"[\1]'s", out)
+    out = re.sub(r"\s{2,}", " ", out).strip()
+    return out
+
+
+def _mask_from_entities(
+    entities: list[dict[str, Any]] | None,
+    text: str,
+    *,
+    typed_mode: bool,
+    use_regex: bool,
+    use_literal_hints: bool,
+) -> str:
+    if not text:
+        return ""
+
+    spans = _entities_to_spans(entities, text, typed_mode=typed_mode)
+    blocked = [(s, e) for s, e, _ in spans]
+
+    extra: list[tuple[int, int, str]] = []
+    if use_regex:
+        extra.extend(_regex_spans(text, blocked, typed=typed_mode))
+        blocked = blocked + [(s, e) for s, e, _ in extra]
+    if use_literal_hints:
+        extra.extend(_literal_hint_spans(text, blocked, typed=typed_mode))
+
+    all_spans = sorted(spans + extra, key=lambda x: (x[0], x[1]))
+    # Final non-overlap pass.
+    final_spans: list[tuple[int, int, str]] = []
+    last_end = -1
+    for s, e, ph in all_spans:
+        if s < last_end:
+            continue
+        final_spans.append((s, e, ph))
+        last_end = e
+
+    masked = _apply_spans(text, final_spans)
+    return _cleanup_masked_text(masked, typed_mode=typed_mode)
+
+
+def _predict_entities_dataset(ner_pipe: Any, ds: Dataset, batch_size: int) -> list[list[dict[str, Any]]]:
+    from transformers.pipelines.pt_utils import KeyDataset
+
+    out: list[list[dict[str, Any]]] = []
+    for item in ner_pipe(KeyDataset(ds, "question"), batch_size=batch_size):
+        if item is None:
+            out.append([])
+        elif isinstance(item, list):
+            out.append(item)
+        elif isinstance(item, dict):
+            out.append([item])
+        else:
+            out.append([])
+    if len(out) != len(ds):
+        raise RuntimeError(f"NER output length mismatch: got {len(out)}, expected {len(ds)}")
+    return out
+
+
 def main() -> None:
     args = _parse_args()
     inputs = _resolve_inputs(args)
@@ -375,6 +505,7 @@ def main() -> None:
     from transformers import pipeline
 
     use_regex = not args.no_regex_num_date
+    use_literal_hints = args.literal_place_hints
 
     def _build_ner_pipe(name: str) -> Any:
         tokenizer = _load_tokenizer_for_ner(name)
@@ -382,34 +513,30 @@ def main() -> None:
             "token-classification",
             model=name,
             tokenizer=tokenizer,
-            grouped_entities=True,
+            aggregation_strategy="simple",
             device=args.device,
         )
+
     per_model_stats: dict[str, dict[str, Any]] = {}
     errors: list[dict[str, str]] = []
-
-    split_dirs = args.split_typed_uniform_dirs
 
     for model_name in models:
         slug = _sanitize_slug(model_name)
         model_root = args.out_dir / slug
         typed_root = model_root / "typed"
         uniform_root = model_root / "uniform"
+        split_dirs = args.split_typed_uniform_dirs
         if split_dirs:
             typed_root.mkdir(parents=True, exist_ok=True)
             uniform_root.mkdir(parents=True, exist_ok=True)
         else:
             model_root.mkdir(parents=True, exist_ok=True)
 
-        print(
-            f"Loading NER pipeline: {model_name} "
-            f"(batch_size={args.batch_size}, KeyDataset + DataLoader GPU batching) ..."
-        )
+        print(f"Loading NER pipeline: {model_name} (batch_size={args.batch_size}) ...")
         ner_pipe = _build_ner_pipe(model_name)
 
         total_rows = 0
         files_out = 0
-
         for inp in inputs:
             base = inp.name
             if split_dirs:
@@ -427,7 +554,7 @@ def main() -> None:
             questions = ds["question"]
             try:
                 entities_list = _predict_entities_dataset(ner_pipe, ds, args.batch_size)
-            except Exception as ex:  # noqa: BLE001
+            except Exception as ex:
                 errors.append({"model": model_name, "file": str(inp), "error": f"batch_ner: {ex}"})
                 continue
 
@@ -446,10 +573,18 @@ def main() -> None:
                         q = questions[i]
                         ent_i = entities_list[i]
                         mt = _mask_from_entities(
-                            ent_i, q, typed_mode=True, use_regex=use_regex
+                            ent_i,
+                            q,
+                            typed_mode=True,
+                            use_regex=use_regex,
+                            use_literal_hints=use_literal_hints,
                         )
                         mu = _mask_from_entities(
-                            ent_i, q, typed_mode=False, use_regex=use_regex
+                            ent_i,
+                            q,
+                            typed_mode=False,
+                            use_regex=use_regex,
+                            use_literal_hints=use_literal_hints,
                         )
                         row_t = {
                             "id": obj.get("id"),
@@ -477,7 +612,7 @@ def main() -> None:
                             }
                             tf.write(json.dumps(combined, ensure_ascii=False) + "\n")
                         total_rows += 1
-                    except Exception as ex:  # noqa: BLE001
+                    except Exception as ex:
                         errors.append({"model": model_name, "file": str(inp), "error": str(ex)})
             finally:
                 tf.close()
@@ -486,9 +621,7 @@ def main() -> None:
 
             files_out += 1
             if split_dirs:
-                print(
-                    f"  {model_name}: {inp.name} ({len(records)} rows) -> {slug}/typed|uniform"
-                )
+                print(f"  {model_name}: {inp.name} ({len(records)} rows) -> {slug}/typed|uniform")
             else:
                 print(f"  {model_name}: {inp.name} ({len(records)} rows) -> {slug}/{base}")
 
@@ -500,16 +633,16 @@ def main() -> None:
         }
 
     metrics = {
-        "script": "ner_mask_musique_question_chunks.py",
+        "script": "ner_mask_musique_question_chunks_fixed.py",
         "created_utc": datetime.now(timezone.utc).isoformat(),
         "seed": args.seed,
         "ner_models": models,
         "batch_size": args.batch_size,
-        "ner_inference": "Dataset.from_list(rows); batched pipeline forward; one entity prediction per row reused for typed + uniform masks",
-        "output_layout": "split_typed_uniform_dirs" if split_dirs else "combined_single_file",
         "device": args.device,
         "regex_num_date_enabled": use_regex,
-        "typed_mapping_note": "PER/PERSON->[PERSON], ORG->[ORG], LOC/GPE->[PLACE], MISC->[WORK]; unknown->[ENTITY] or [MASK]; adjacent same-type spans merged (gap<=3 chars)",
+        "literal_place_hints_enabled": use_literal_hints,
+        "typed_mapping_note": "PER/PERSON->[PERSON], ORG->[ORG], LOC/GPE/FAC->[PLACE], DATE/TIME->[DATE], numeric labels->[NUM], ambiguous labels->[ENTITY]",
+        "cleanup_note": "collapses broken adjacent placeholder runs and removes artifacts like [ENTITY]3",
         "inputs": [str(p) for p in inputs],
         "per_model": per_model_stats,
         "errors": errors,
@@ -521,13 +654,13 @@ def main() -> None:
 
     notes = args.run_dir / "notes.md"
     notes.write_text(
-        "# MusiQue question NER mask\n\n"
+        "# MusiQue question NER mask (fixed)\n\n"
         f"- Seed: {args.seed}\n"
         f"- Models: {', '.join(models)}\n"
         f"- Output root: `{args.out_dir}`\n"
         f"- Regex NUM/DATE pass: {use_regex}\n"
-        f"- Batch size (pipeline): {args.batch_size}\n"
-        f"- Output layout: {'typed/ + uniform/ dirs' if split_dirs else 'single JSONL with typed + uniform columns'}\n"
+        f"- Literal hints: {use_literal_hints}\n"
+        f"- Batch size: {args.batch_size}\n"
         f"- Metrics: `{metrics_path}`\n",
         encoding="utf-8",
     )
